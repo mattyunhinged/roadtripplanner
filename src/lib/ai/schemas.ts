@@ -1,50 +1,52 @@
 import { z } from 'zod';
 
 export const draftStopSchema = z.object({
-  name: z.string(),
-  category: z.enum([
-    'origin',
-    'destination',
-    'food',
-    'lodging',
-    'attraction',
-    'scenic',
-    'fuel',
-    'custom',
-  ]),
-  dayIndex: z.number().int().min(0),
-  order: z.number().int().min(0),
-  searchQuery: z.string(),
+  name: z.string().min(1),
+  category: z
+    .enum([
+      'origin',
+      'destination',
+      'food',
+      'lodging',
+      'attraction',
+      'scenic',
+      'fuel',
+      'custom',
+    ])
+    .catch('custom'),
+  dayIndex: z.coerce.number().int().min(0).default(0),
+  order: z.coerce.number().int().min(0).default(0),
+  searchQuery: z.string().min(1),
   approximateLocation: z
     .object({
-      lat: z.number(),
-      lng: z.number(),
+      lat: z.coerce.number(),
+      lng: z.coerce.number(),
     })
     .optional(),
   timeWindow: z.string().optional(),
-  costEstimate: z.number().optional(),
+  costEstimate: z.coerce.number().optional(),
   aiNotes: z.string().optional(),
-  isSideQuest: z.boolean().optional(),
+  isSideQuest: z.boolean().optional().default(false),
 });
 
 export const draftDaySchema = z.object({
-  index: z.number().int().min(0),
-  title: z.string(),
+  index: z.coerce.number().int().min(0),
+  title: z.string().min(1),
   summary: z.string().optional(),
   date: z.string().optional(),
 });
 
 export const draftTripSchema = z.object({
-  title: z.string(),
-  vibe: z.string(),
-  totalDays: z.number().int().min(1),
+  title: z.string().min(1),
+  vibe: z.string().default(''),
+  totalDays: z.coerce.number().int().min(1).max(14),
   originQuery: z.string().optional(),
   destinationQueries: z.array(z.string()).default([]),
   roundTrip: z.boolean().default(true),
-  days: z.array(draftDaySchema),
-  stops: z.array(draftStopSchema),
+  days: z.array(draftDaySchema).default([]),
+  stops: z.array(draftStopSchema).min(1),
   budgetNotes: z.string().optional(),
-  assumedMpg: z.number().optional(),
+  assumedMpg: z.coerce.number().optional(),
   progressHints: z.array(z.string()).optional(),
 });
 

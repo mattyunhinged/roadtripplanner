@@ -54,27 +54,6 @@ function progress(step: string, detail: string, percent: number, phase?: Autopil
   log(detail, { step, percent, phase, kind: 'status' });
 }
 
-function extractPartialHints(buffer: string): string[] {
-  const hints: string[] = [];
-  const title = buffer.match(/"title"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"/);
-  if (title?.[1]) hints.push(`naming it “${title[1].slice(0, 48)}”…`);
-  const vibe = buffer.match(/"vibe"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"/);
-  if (vibe?.[1]) hints.push(`vibe check: ${vibe[1].slice(0, 72)}`);
-  const stopNames = [...buffer.matchAll(/"name"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"/g)].map(
-    (m) => m[1],
-  );
-  if (stopNames.length) {
-    const latest = stopNames[stopNames.length - 1];
-    hints.push(`eyeing ${latest}`);
-  }
-  const days = buffer.match(/"totalDays"\s*:\s*(\d+)/);
-  if (days?.[1]) hints.push(`shaping a ${days[1]}-day arc…`);
-  if (buffer.includes('"isSideQuest": true') || buffer.includes('"isSideQuest":true')) {
-    hints.push('sneaking in a side quest…');
-  }
-  return hints;
-}
-
 async function resolveDraftTrip(draft: DraftTrip, profile: TravelerProfile): Promise<Trip> {
   const home = profile.home;
   const originQuery = draft.originQuery || home?.address || 'United States';
@@ -387,8 +366,6 @@ export async function runAutopilot(
       );
     }
 
-    let lastHintAt = 0;
-    let tokenCount = 0;
     const messages = [
       { role: 'system' as const, content: AUTOPILOT_SYSTEM },
       {
@@ -401,69 +378,75 @@ export async function runAutopilot(
         }),
       },
     ];
-    const temperature = prefs?.generationSpeed === 'fast' ? 0.35 : 0.55;
-    // Big trips can exceed 8k output tokens and get truncated mid-JSON.
-    const maxTokens = prefs?.generationSpeed === 'fast' ? 8000 : 16000;
+    const temperature = prefs?.generationSpeed === 'fast' ? 0.3 : 0.45;
+    const maxTokens = prefs?.generationSpeed === 'fast' ? 6000 : 10000;
+    const heartbeatLines = [
+      'sketching the route bones…',
+      'picking stops that slap…',
+      'slotting food + lodging…',
+      'sneaking in side quests…',
+      'tightening the JSON…',
+      'almost locked…',
+    ];
+    let beat = 0;
+    const heartbeat = window.setInterval(() => {
+      const line = heartbeatLines[beat % heartbeatLines.length];
+      beat += 1;
+      log(line, {
+        phase: 'thinking',
+        kind: 'thought',
+        step: 'autopilot is cooking',
+        percent: Math.min(18, 8 + beat),
+      });
+    }, 2200);
 
-    let content = await provider.stream(keys.aiKey, model, {
-      messages,
-      jsonMode: true,
-      temperature,
-      maxTokens,
-      onToken: (token) => {
-        tokenCount += 1;
-        const current = useUIStore.getState().autopilotProgress;
-        const buffer = (current?.streamPreview || '') + token;
-        const preview = buffer.slice(-280);
-        const now = Date.now();
-        if (now - lastHintAt > 700) {
-          lastHintAt = now;
-          const hints = extractPartialHints(buffer);
-          const hint = hints[hints.length - 1] || 'plotting chaos in a good way…';
-          const pct = Math.min(20, 8 + Math.floor(tokenCount / 40));
-          log(hint, {
-            phase: 'thinking',
-            kind: 'thought',
-            step: 'autopilot is cooking',
-            percent: pct,
-            streamPreview: preview,
-          });
-        } else {
-          useUIStore.getState().setAutopilotProgress({
-            step: current?.step || 'autopilot is cooking',
-            detail: current?.detail || 'Streaming…',
-            percent: Math.min(20, 8 + Math.floor(tokenCount / 40)),
-            phase: 'thinking',
-            log: current?.log || [],
-            streamPreview: preview,
-          });
-        }
-      },
-    });
+    let content = '';
+    try {
+      // Non-streaming is more reliable for large JSON than SSE assembly.
+      content = await provider.complete(keys.aiKey, model, {
+        messages,
+        jsonMode: true,
+        temperature,
+        maxTokens,
+      });
+    } finally {
+      window.clearInterval(heartbeat);
+    }
 
     progress('draft locked', 'validating the itinerary…', 21, 'thinking');
     let draft: DraftTrip;
     try {
       draft = draftTripSchema.parse(extractJSON<unknown>(content));
     } catch (parseError) {
-      log('stream got messy — retrying clean JSON…', {
+      log('first draft was messy — asking for a clean compact JSON…', {
         phase: 'thinking',
         kind: 'warn',
         percent: 18,
       });
-      content = await provider.complete(keys.aiKey, model, {
-        messages: [
-          ...messages,
-          {
-            role: 'user',
-            content:
-              'Your previous response was invalid JSON. Reply with ONLY a valid JSON object matching the schema. No markdown, no commentary.',
-          },
-        ],
-        jsonMode: true,
-        temperature: 0.2,
-        maxTokens,
-      });
+      const retryBeat = window.setInterval(() => {
+        log('rewriting a cleaner trip draft…', {
+          phase: 'thinking',
+          kind: 'thought',
+          percent: 19,
+        });
+      }, 2500);
+      try {
+        content = await provider.complete(keys.aiKey, model, {
+          messages: [
+            ...messages,
+            {
+              role: 'user',
+              content:
+                'IMPORTANT: Return a SHORTER complete trip now — max 4 days and max 16 stops. ONLY valid JSON. Double-quote all keys and strings. No markdown. No trailing commas. Keep aiNotes under 60 chars.',
+            },
+          ],
+          jsonMode: true,
+          temperature: 0.15,
+          maxTokens: 6000,
+        });
+      } finally {
+        window.clearInterval(retryBeat);
+      }
       draft = draftTripSchema.parse(extractJSON<unknown>(content));
     }
     log(`locked: ${draft.title} · ${draft.totalDays} days`, {

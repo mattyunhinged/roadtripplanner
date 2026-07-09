@@ -21,16 +21,28 @@ export interface AIProvider {
 }
 
 async function postJSON<T>(url: string, body: unknown): Promise<T> {
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  const data = (await response.json()) as T & { error?: string; valid?: boolean };
-  if (!response.ok) {
-    throw new Error((data as { error?: string }).error || `Request failed (${response.status})`);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 180_000);
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+    const data = (await response.json()) as T & { error?: string; valid?: boolean };
+    if (!response.ok) {
+      throw new Error((data as { error?: string }).error || `Request failed (${response.status})`);
+    }
+    return data;
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw new Error('AI request timed out after 3 minutes. Try Fast mode or a shorter trip.');
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
   }
-  return data;
 }
 
 async function streamComplete(
