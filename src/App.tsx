@@ -28,8 +28,9 @@ export default function App() {
   useEffect(() => {
     hydrateKeys();
     hydrateProfile();
-    hydrateTrips();
+    // Chat before trips so bindTrip can keep the matching thread
     hydrateChat();
+    hydrateTrips();
   }, [hydrateKeys, hydrateProfile, hydrateTrips, hydrateChat]);
 
   useEffect(() => {

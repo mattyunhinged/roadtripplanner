@@ -3,6 +3,7 @@ import type { Trip, Stop, DriveLeg } from '@/types';
 import { hydrateBoardImage, tripForLocalStorage } from '@/lib/boardStore';
 import { loadJSON, saveJSON } from '@/lib/storage';
 import { applyBudget, createEmptyTrip, recomputeDayTotals, reorderStops } from '@/lib/ai/tripPatch';
+import { useChatStore } from './chatStore';
 import { useProfileStore } from './profileStore';
 import { useKeysStore } from './keysStore';
 
@@ -45,6 +46,7 @@ export const useTripStore = create<TripState>((set, get) => ({
     const library = loadJSON<Trip[]>(LIBRARY_STORAGE, []);
     const activeTrip = loadJSON<Trip | null>(ACTIVE_STORAGE, null);
     set({ library, activeTrip });
+    useChatStore.getState().bindTrip(activeTrip?.id ?? null);
     void (async () => {
       const hydratedActive = await hydrateBoardImage(activeTrip);
       const hydratedLibrary = await Promise.all(
@@ -60,6 +62,7 @@ export const useTripStore = create<TripState>((set, get) => ({
   setActiveTrip: (trip) => {
     set({ activeTrip: trip });
     persistActive(trip);
+    useChatStore.getState().bindTrip(trip?.id ?? null);
   },
 
   updateActiveTrip: (updater) => {

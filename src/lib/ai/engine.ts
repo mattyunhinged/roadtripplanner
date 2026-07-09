@@ -1,5 +1,5 @@
 import { v4 as uuid } from 'uuid';
-import { getAIProvider, extractJSON } from '@/lib/ai/provider';
+import { getAIProvider, extractJSON, type AIMessage } from '@/lib/ai/provider';
 import {
   AUTOPILOT_SYSTEM,
   autopilotOutlinePrompt,
@@ -42,8 +42,49 @@ import { useProfileStore } from '@/stores/profileStore';
 import { useTripStore } from '@/stores/tripStore';
 import { useUIStore } from '@/stores/uiStore';
 import { saveBoardImage } from '@/lib/boardStore';
-import { saveJSON } from '@/lib/storage';
 import { friendlyError } from '@/lib/utils';
+
+/** Pull a readable preview of the assistant "message" field while JSON streams. */
+export function previewCopilotMessage(buffer: string): string {
+  if (!buffer.includes('"message"')) return 'Thinking through your trip…';
+  const match = buffer.match(/"message"\s*:\s*"((?:[^"\\]|\\.)*)/);
+  if (!match?.[1]) return 'Working on your trip…';
+  try {
+    return JSON.parse(`"${match[1]}"`) as string;
+  } catch {
+    return match[1].replace(/\\"/g, '"').replace(/\\n/g, ' ');
+  }
+}
+
+function recentChatHistory(excludeIds: Set<string>, limit = 8): AIMessage[] {
+  const msgs = useChatStore.getState().messages.filter(
+    (m) =>
+      !excludeIds.has(m.id) &&
+      (m.role === 'user' || m.role === 'assistant') &&
+      m.content.trim().length > 0 &&
+      !m.content.startsWith('I hit a snag:'),
+  );
+  return msgs.slice(-limit).map((m) => ({
+    role: m.role === 'assistant' ? 'assistant' : 'user',
+    content: m.content,
+  }));
+}
+
+function editTouchedTrip(
+  parsed: ReturnType<typeof tripEditResponseSchema.parse>,
+): boolean {
+  if (parsed.action === 'replace' && parsed.fullTrip) return true;
+  if (parsed.action === 'patch') return true;
+  return Boolean(
+    parsed.stopsToAdd?.length ||
+      parsed.stopIdsToRemove?.length ||
+      parsed.stopUpdates?.length ||
+      parsed.reorder?.length ||
+      parsed.packingList?.length ||
+      parsed.title ||
+      parsed.vibe,
+  );
+}
 
 function log(
   text: string,
@@ -848,7 +889,8 @@ export async function runTripEdit(
   userMessage: string,
   focusStop?: Stop,
   onToken?: (token: string) => void,
-): Promise<string> {
+  options?: { history?: AIMessage[]; onStatus?: (status: string) => void },
+): Promise<{ message: string; patched: boolean }> {
   const keys = useKeysStore.getState().keys;
   if (!keys) throw new Error('Add your API keys first.');
   const trip = useTripStore.getState().activeTrip;
@@ -856,14 +898,18 @@ export async function runTripEdit(
   const model = useKeysStore.getState().currentModel();
   const provider = getAIProvider(keys.aiProvider);
 
+  const history = options?.history ?? recentChatHistory(new Set());
+  const userContent = `${askAiPrompt('copilot', userMessage, trip, focusStop)}\n\nTraveler:\n${profilePrompt(profile)}`;
+
+  const messages: AIMessage[] = [
+    { role: 'system', content: COPILOT_SYSTEM },
+    ...history,
+    { role: 'user', content: userContent },
+  ];
+
+  options?.onStatus?.('Listening…');
   const content = await provider.stream(keys.aiKey, model, {
-    messages: [
-      { role: 'system', content: COPILOT_SYSTEM },
-      {
-        role: 'user',
-        content: `${askAiPrompt('copilot', userMessage, trip, focusStop)}\n\nTraveler:\n${profilePrompt(profile)}`,
-      },
-    ],
+    messages,
     jsonMode: true,
     temperature: 0.35,
     onToken,
@@ -873,12 +919,14 @@ export async function runTripEdit(
   try {
     parsed = tripEditResponseSchema.parse(extractJSON(content));
   } catch {
+    options?.onStatus?.('Cleaning up the reply…');
     const retry = await provider.complete(keys.aiKey, model, {
       messages: [
         { role: 'system', content: COPILOT_SYSTEM },
+        ...history,
         {
           role: 'user',
-          content: `${askAiPrompt('copilot', userMessage, trip, focusStop)}\n\nTraveler:\n${profilePrompt(profile)}\n\nReply with ONLY valid JSON. No markdown.`,
+          content: `${userContent}\n\nReply with ONLY valid JSON. No markdown.`,
         },
       ],
       jsonMode: true,
@@ -886,43 +934,61 @@ export async function runTripEdit(
     });
     parsed = tripEditResponseSchema.parse(extractJSON(retry));
   }
+
+  const patched = editTouchedTrip(parsed);
+  if (patched) {
+    options?.onStatus?.('Updating your map…');
+  }
   await applyEditResponse(parsed);
-  return parsed.message;
+  options?.onStatus?.('');
+  return { message: parsed.message, patched };
 }
 
 export async function runAskAi(kind: string, context: string, stop?: Stop): Promise<string> {
   const chat = useChatStore.getState();
   const ui = useUIStore.getState();
 
-  const userText = `${kind}: ${context}`;
+  if (chat.streaming) {
+    throw new Error('Copilot is still working — hang tight a sec.');
+  }
+
+  // Snapshot history BEFORE we append this turn (avoids duplicating the user message)
+  const history = recentChatHistory(new Set());
+
+  const userText = kind === 'copilot' ? context : `${kind}: ${context}`;
   chat.addMessage({ role: 'user', content: userText });
   ui.setChatOpen(true);
   chat.setStreaming(true);
+  chat.setStatus('Thinking…');
   const placeholder = chat.addMessage({ role: 'assistant', content: '' });
   let buffer = '';
 
   try {
-    const reply = await runTripEdit(userText, stop, (token) => {
-      buffer += token;
-      const preview = buffer.includes('"message"')
-        ? buffer.match(/"message"\s*:\s*"((?:[^"\\]|\\.)*)/)?.[1]?.replace(/\\"/g, '"') ||
-          'Working on your trip…'
-        : 'Thinking through your trip…';
-      useChatStore.getState().updateMessage(placeholder.id, `${preview}…`);
-    });
-    useChatStore.getState().updateMessage(placeholder.id, reply);
-    const msgs = useChatStore.getState().messages.map((m) =>
-      m.id === placeholder.id ? { ...m, content: reply, tripPatchApplied: true } : m,
+    const { message: reply, patched } = await runTripEdit(
+      userText,
+      stop,
+      (token) => {
+        buffer += token;
+        const preview = previewCopilotMessage(buffer);
+        useChatStore.getState().updateMessage(placeholder.id, `${preview}…`);
+        useChatStore.getState().setStatus('Writing a reply…');
+      },
+      {
+        history,
+        onStatus: (status) => useChatStore.getState().setStatus(status),
+      },
     );
-    useChatStore.setState({ messages: msgs });
-    saveJSON('chat', msgs);
+    useChatStore.getState().updateMessage(placeholder.id, reply, {
+      tripPatchApplied: patched,
+    });
     return reply;
   } catch (error) {
     const msg = error instanceof Error ? error.message : 'Ask AI failed';
-    useChatStore.getState().updateMessage(placeholder.id, msg);
+    useChatStore.getState().updateMessage(placeholder.id, `I hit a snag: ${msg}`);
     throw error;
   } finally {
     useChatStore.getState().setStreaming(false);
+    useChatStore.getState().setStatus('');
   }
 }
 

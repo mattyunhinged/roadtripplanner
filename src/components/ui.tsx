@@ -220,9 +220,15 @@ function useUIStoreToast() {
 
 export function ToastHost() {
   const toast = useUIStoreToast();
+  const chatOpen = useUIStore((s) => s.chatOpen);
   if (!toast) return null;
   return (
-    <div className="pointer-events-none fixed bottom-6 left-1/2 z-[80] -translate-x-1/2 no-print">
+    <div
+      className={cn(
+        'pointer-events-none fixed left-1/2 z-[90] -translate-x-1/2 no-print',
+        chatOpen ? 'top-6' : 'bottom-6',
+      )}
+    >
       <div
         className={cn(
           'pointer-events-auto rounded-2xl px-4 py-3 text-sm shadow-lg',

@@ -25,6 +25,7 @@ import {
 import { categoryLabel, googleMapsDayUrl } from '@/lib/ai/tripPatch';
 import { runAskAi, recalculateRoutes } from '@/lib/ai/engine';
 import { cn, formatCurrency, formatDuration, formatMiles } from '@/lib/utils';
+import { useChatStore } from '@/stores/chatStore';
 import { useProfileStore } from '@/stores/profileStore';
 import { useTripStore } from '@/stores/tripStore';
 import { useUIStore } from '@/stores/uiStore';
@@ -219,8 +220,8 @@ export function ItineraryPanel() {
   const setDayFilter = useUIStore((s) => s.setDayFilter);
   const setAutopilotOpen = useUIStore((s) => s.setAutopilotOpen);
   const setTripWizardOpen = useUIStore((s) => s.setTripWizardOpen);
-  const setChatOpen = useUIStore((s) => s.setChatOpen);
   const showToast = useUIStore((s) => s.showToast);
+  const streaming = useChatStore((s) => s.streaming);
   const [busy, setBusy] = useState(false);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
@@ -427,12 +428,12 @@ export function ItineraryPanel() {
                             <DriveChip
                               leg={leg}
                               onAsk={async () => {
+                                if (streaming) return;
                                 try {
                                   await runAskAi(
                                     'leg',
                                     `Add a fun scenic or food side quest between ${stop.name} and ${next.name}. Keep it chill.`,
                                   );
-                                  setChatOpen(true);
                                 } catch (error) {
                                   showToast(
                                     error instanceof Error ? error.message : 'Ask AI failed',

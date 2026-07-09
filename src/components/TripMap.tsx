@@ -7,6 +7,7 @@ import { MAP_STYLES_DARK, MAP_STYLES_LIGHT, decodePolyline } from '@/lib/google/
 import { runAskAi } from '@/lib/ai/engine';
 import { categoryLabel } from '@/lib/ai/tripPatch';
 import { cn, formatCurrency, priceLevelLabel } from '@/lib/utils';
+import { useChatStore } from '@/stores/chatStore';
 import { useKeysStore } from '@/stores/keysStore';
 import { useProfileStore } from '@/stores/profileStore';
 import { useTripStore } from '@/stores/tripStore';
@@ -151,7 +152,7 @@ function MapClickHandler({
 function PlaceCard({ stop, onClose }: { stop: Stop; onClose: () => void }) {
   const removeStop = useTripStore((s) => s.removeStop);
   const showToast = useUIStore((s) => s.showToast);
-  const setChatOpen = useUIStore((s) => s.setChatOpen);
+  const streaming = useChatStore((s) => s.streaming);
   const [asking, setAsking] = useState(false);
   const [askText, setAskText] = useState('');
   const [photoIndex, setPhotoIndex] = useState(0);
@@ -170,12 +171,11 @@ function PlaceCard({ stop, onClose }: { stop: Stop; onClose: () => void }) {
   }
 
   async function ask() {
-    if (!askText.trim()) return;
+    if (!askText.trim() || streaming) return;
     setAsking(true);
     try {
       await runAskAi('stop', askText.trim(), stop);
       setAskText('');
-      setChatOpen(true);
     } catch (error) {
       showToast(error instanceof Error ? error.message : 'Ask AI failed', 'error');
     } finally {
@@ -340,6 +340,7 @@ function PlaceCard({ stop, onClose }: { stop: Stop; onClose: () => void }) {
             size="sm"
             variant="secondary"
             onClick={async () => {
+              if (streaming || asking) return;
               setAsking(true);
               try {
                 await runAskAi(
@@ -347,13 +348,13 @@ function PlaceCard({ stop, onClose }: { stop: Stop; onClose: () => void }) {
                   `Swap this ${stop.category} for a better alternative nearby`,
                   stop,
                 );
-                setChatOpen(true);
               } catch (error) {
                 showToast(error instanceof Error ? error.message : 'Replace failed', 'error');
               } finally {
                 setAsking(false);
               }
             }}
+            disabled={streaming || asking}
           >
             <Replace className="h-3.5 w-3.5" /> Replace
           </Button>
@@ -366,8 +367,8 @@ function PlaceCard({ stop, onClose }: { stop: Stop; onClose: () => void }) {
             placeholder="Ask AI about this stop…"
             className="glass-input h-10 flex-1 rounded-xl px-3 text-sm outline-none"
           />
-          <Button size="sm" variant="accent" onClick={ask} disabled={asking}>
-            {asking ? <Spinner className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
+          <Button size="sm" variant="accent" onClick={ask} disabled={asking || streaming || !askText.trim()}>
+            {asking || streaming ? <Spinner className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
           </Button>
         </div>
       </div>
