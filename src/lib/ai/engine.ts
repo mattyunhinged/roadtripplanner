@@ -1,7 +1,20 @@
 import { v4 as uuid } from 'uuid';
 import { getAIProvider, extractJSON } from '@/lib/ai/provider';
-import { AUTOPILOT_SYSTEM, autopilotUserPrompt, COPILOT_SYSTEM, askAiPrompt, PACKING_SYSTEM, profilePrompt, tripContextPrompt } from '@/lib/ai/prompts';
-import { draftTripSchema, tripEditResponseSchema, packingListSchema, type DraftTrip } from '@/lib/ai/schemas';
+import {
+  AUTOPILOT_SYSTEM,
+  autopilotUserPrompt,
+  COPILOT_SYSTEM,
+  askAiPrompt,
+  PACKING_SYSTEM,
+  profilePrompt,
+  tripContextPrompt,
+} from '@/lib/ai/prompts';
+import {
+  draftTripSchema,
+  tripEditResponseSchema,
+  packingListSchema,
+  type DraftTrip,
+} from '@/lib/ai/schemas';
 import {
   applyBudget,
   buildDaysFromStops,
@@ -14,23 +27,55 @@ import {
   buildDriveLegs,
   findFuelAlongRoute,
   geocodeAddress,
+  placeMapsUrl,
   searchPlace,
 } from '@/lib/google/maps';
-import type { AutopilotProgress, PackingItem, Stop, TravelerProfile, Trip } from '@/types';
+import type { AutopilotPhase, PackingItem, Stop, TravelerProfile, Trip } from '@/types';
 import { useKeysStore } from '@/stores/keysStore';
 import { useProfileStore } from '@/stores/profileStore';
 import { useTripStore } from '@/stores/tripStore';
 import { useUIStore } from '@/stores/uiStore';
 import { friendlyError } from '@/lib/utils';
 
-function progress(step: string, detail: string, percent: number) {
-  useUIStore.getState().setAutopilotProgress({ step, detail, percent });
+function log(
+  text: string,
+  opts: {
+    phase?: AutopilotPhase;
+    kind?: 'status' | 'thought' | 'place' | 'route' | 'success' | 'warn';
+    step?: string;
+    percent?: number;
+    streamPreview?: string;
+  } = {},
+) {
+  useUIStore.getState().pushAutopilotLog(text, opts);
+}
+
+function progress(step: string, detail: string, percent: number, phase?: AutopilotPhase) {
+  log(detail, { step, percent, phase, kind: 'status' });
+}
+
+function extractPartialHints(buffer: string): string[] {
+  const hints: string[] = [];
+  const title = buffer.match(/"title"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"/);
+  if (title?.[1]) hints.push(`Drafting “${title[1].slice(0, 60)}”…`);
+  const vibe = buffer.match(/"vibe"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"/);
+  if (vibe?.[1]) hints.push(`Vibe: ${vibe[1].slice(0, 80)}`);
+  const stopNames = [...buffer.matchAll(/"name"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"/g)].map(
+    (m) => m[1],
+  );
+  if (stopNames.length) {
+    const latest = stopNames[stopNames.length - 1];
+    hints.push(`Considering stop: ${latest}`);
+  }
+  const days = buffer.match(/"totalDays"\s*:\s*(\d+)/);
+  if (days?.[1]) hints.push(`Shaping a ${days[1]}-day route…`);
+  return hints;
 }
 
 async function resolveDraftTrip(draft: DraftTrip, profile: TravelerProfile): Promise<Trip> {
   const home = profile.home;
   const originQuery = draft.originQuery || home?.address || 'United States';
-  progress('Mapping the start', `Geocoding ${originQuery}…`, 20);
+  progress('Mapping the start', `Geocoding ${originQuery}…`, 22, 'places');
 
   let originPlace = home
     ? {
@@ -38,6 +83,13 @@ async function resolveDraftTrip(draft: DraftTrip, profile: TravelerProfile): Pro
         name: home.address,
         address: home.address,
         location: home.location,
+        photoUrl: undefined as string | undefined,
+        photoUrls: undefined as string[] | undefined,
+        mapsUrl: placeMapsUrl({
+          placeId: home.placeId,
+          address: home.address,
+          location: home.location,
+        }),
       }
     : await geocodeAddress(originQuery);
 
@@ -48,9 +100,15 @@ async function resolveDraftTrip(draft: DraftTrip, profile: TravelerProfile): Pro
     throw new Error('Could not resolve trip origin. Check your home address or prompt.');
   }
 
+  log(`Origin locked: ${originPlace.address || originPlace.name}`, {
+    phase: 'places',
+    kind: 'place',
+    percent: 25,
+  });
+
   const destinations = [];
   for (const q of draft.destinationQueries) {
-    progress('Choosing destinations', `Looking up ${q}…`, 28);
+    progress('Choosing destinations', `Looking up ${q}…`, 28, 'places');
     const place = (await searchPlace(q)) || (await geocodeAddress(q));
     if (place) {
       destinations.push({
@@ -59,6 +117,7 @@ async function resolveDraftTrip(draft: DraftTrip, profile: TravelerProfile): Pro
         placeId: place.placeId,
         name: place.name,
       });
+      log(`Destination found: ${place.name}`, { phase: 'places', kind: 'place', percent: 30 });
     }
   }
 
@@ -67,12 +126,10 @@ async function resolveDraftTrip(draft: DraftTrip, profile: TravelerProfile): Pro
 
   for (let i = 0; i < draft.stops.length; i++) {
     const draftStop = draft.stops[i];
-    progress(
-      'Finding real places',
+    const hint =
       draft.progressHints?.[Math.min(i, (draft.progressHints.length || 1) - 1)] ||
-        `Resolving ${draftStop.name}…`,
-      30 + Math.round((i / total) * 40),
-    );
+      `Resolving ${draftStop.name}…`;
+    progress('Finding real places', hint, 32 + Math.round((i / total) * 38), 'places');
 
     const near = draftStop.approximateLocation || originPlace.location;
     let resolved =
@@ -86,17 +143,31 @@ async function resolveDraftTrip(draft: DraftTrip, profile: TravelerProfile): Pro
         name: draftStop.name,
         location: draftStop.approximateLocation,
         address: draftStop.name,
+        mapsUrl: placeMapsUrl({
+          name: draftStop.name,
+          location: draftStop.approximateLocation,
+        }),
       };
     }
 
     if (!resolved) {
-      // keep approximate so trip still works
       resolved = {
         placeId: '',
         name: draftStop.name,
         location: near,
         address: draftStop.searchQuery,
+        mapsUrl: placeMapsUrl({ name: draftStop.name, location: near }),
       };
+      log(`Approximate pin for ${draftStop.name}`, {
+        phase: 'places',
+        kind: 'warn',
+        percent: 32 + Math.round((i / total) * 38),
+      });
+    } else {
+      log(
+        `${resolved.photoUrl ? '📷 ' : ''}${resolved.name}${resolved.rating ? ` · ★ ${resolved.rating.toFixed(1)}` : ''}`,
+        { phase: 'places', kind: 'place', percent: 32 + Math.round((i / total) * 38) },
+      );
     }
 
     stops.push(
@@ -109,6 +180,8 @@ async function resolveDraftTrip(draft: DraftTrip, profile: TravelerProfile): Pro
         priceLevel: resolved.priceLevel,
         hours: resolved.hours,
         photoUrl: resolved.photoUrl,
+        photoUrls: resolved.photoUrls,
+        mapsUrl: resolved.mapsUrl,
         website: resolved.website,
         phone: resolved.phone,
         costEstimate: draftStop.costEstimate,
@@ -116,7 +189,6 @@ async function resolveDraftTrip(draft: DraftTrip, profile: TravelerProfile): Pro
     );
   }
 
-  // Ensure origin exists as first stop if missing
   if (!stops.some((s) => s.category === 'origin')) {
     stops.unshift({
       id: uuid(),
@@ -128,16 +200,28 @@ async function resolveDraftTrip(draft: DraftTrip, profile: TravelerProfile): Pro
       dayIndex: 0,
       order: 0,
       aiNotes: 'Trip start',
+      photoUrl: originPlace.photoUrl,
+      photoUrls: originPlace.photoUrls,
+      mapsUrl: originPlace.mapsUrl || placeMapsUrl(originPlace),
     });
   }
 
-  progress('Plotting the route', 'Calling Google Directions for real drive times…', 75);
+  progress('Plotting the route', 'Calling Google Directions for real drive times…', 75, 'routing');
 
   const maxHours = profile.maxDriveHoursPerDay;
   let legs = await buildDriveLegs(stops, maxHours);
+  log(`Mapped ${legs.length} driving legs`, { phase: 'routing', kind: 'route', percent: 78 });
 
-  // Fuel suggestions on long legs
-  progress('Fuel & timing', 'Adding fuel stops on long legs…', 85);
+  const over = legs.filter((l) => l.exceedsMaxDrive);
+  if (over.length) {
+    log(`Warning: ${over.length} leg(s) exceed your ${maxHours}h/day max`, {
+      phase: 'routing',
+      kind: 'warn',
+      percent: 80,
+    });
+  }
+
+  progress('Fuel & timing', 'Adding fuel stops on long legs…', 85, 'routing');
   const fuelStops: Stop[] = [];
   for (const leg of legs.filter((l) => l.fuelSuggested)) {
     const from = stops.find((s) => s.id === leg.fromStopId);
@@ -145,7 +229,8 @@ async function resolveDraftTrip(draft: DraftTrip, profile: TravelerProfile): Pro
     if (!from || !to) continue;
     const fuel = await findFuelAlongRoute(from.location, to.location);
     if (!fuel) continue;
-    const fuelStop: Stop = {
+    log(`Fuel stop: ${fuel.name}`, { phase: 'routing', kind: 'place', percent: 88 });
+    fuelStops.push({
       id: uuid(),
       name: fuel.name,
       category: 'fuel',
@@ -156,17 +241,17 @@ async function resolveDraftTrip(draft: DraftTrip, profile: TravelerProfile): Pro
       order: from.order + 0.5,
       rating: fuel.rating,
       photoUrl: fuel.photoUrl,
+      photoUrls: fuel.photoUrls,
+      mapsUrl: fuel.mapsUrl,
       aiNotes: 'Suggested fuel stop for a long driving leg',
       costEstimate: 50,
-    };
-    fuelStops.push(fuelStop);
+    });
   }
 
-  let allStops = [...stops, ...fuelStops]
-    .map((s, idx) => ({ ...s, order: s.order }))
-    .sort((a, b) => a.dayIndex - b.dayIndex || a.order - b.order);
+  let allStops = [...stops, ...fuelStops].sort(
+    (a, b) => a.dayIndex - b.dayIndex || a.order - b.order,
+  );
 
-  // Normalize orders per day
   const byDay = new Map<number, Stop[]>();
   for (const s of allStops) {
     const list = byDay.get(s.dayIndex) || [];
@@ -184,13 +269,14 @@ async function resolveDraftTrip(draft: DraftTrip, profile: TravelerProfile): Pro
     legs = await buildDriveLegs(allStops, maxHours);
   }
 
+  progress('Budgeting the trip', 'Estimating fuel, lodging, food & activities…', 92, 'budget');
+
   const days = buildDaysFromStops(allStops, draft.days);
   const mpg = useKeysStore.getState().settings.vehicleMpg ?? draft.assumedMpg ?? null;
 
   let trip = createEmptyTrip({
     title: draft.title,
     vibe: draft.vibe,
-    prompt: undefined,
     origin: {
       lat: originPlace.location.lat,
       lng: originPlace.location.lng,
@@ -208,6 +294,11 @@ async function resolveDraftTrip(draft: DraftTrip, profile: TravelerProfile): Pro
 
   trip = mergeLegsIntoTrip(trip, legs);
   trip = applyBudget(trip, profile, mpg);
+  log(`Budget ~$${Math.round(trip.budget.total)} · ${Math.round(trip.totalMiles)} mi`, {
+    phase: 'budget',
+    kind: 'success',
+    percent: 94,
+  });
   return trip;
 }
 
@@ -218,23 +309,29 @@ export async function runAutopilot(userPrompt: string): Promise<Trip> {
   const model = useKeysStore.getState().currentModel();
   const provider = getAIProvider(keys.aiProvider);
 
+  useUIStore.getState().setAutopilotProgress({
+    step: 'Warming up',
+    detail: 'Reading your traveler profile…',
+    percent: 2,
+    phase: 'thinking',
+    log: [],
+  });
+
   try {
-    progress('Warming up Autopilot', 'Reading your traveler profile…', 5);
-
-    const hints = [
-      'Sketching destinations that match your vibe…',
-      'Balancing drive days against your max hours…',
-      'Picking lodging and dinner stops…',
-    ];
-    hints.forEach((h, i) => {
-      window.setTimeout(() => {
-        if (useUIStore.getState().autopilotProgress) {
-          progress('Planning', h, 8 + i * 3);
-        }
-      }, 400 * (i + 1));
+    log('Reading traveler profile & preferences…', {
+      phase: 'thinking',
+      kind: 'status',
+      step: 'Warming up Autopilot',
+      percent: 4,
     });
+    log(
+      `${profile.travelStyle} · ${profile.budgetLevel} · max ${profile.maxDriveHoursPerDay}h/day · ${profile.partyType}`,
+      { phase: 'thinking', kind: 'thought', percent: 6 },
+    );
 
-    const content = await provider.complete(keys.aiKey, model, {
+    let lastHintAt = 0;
+    let tokenCount = 0;
+    const content = await provider.stream(keys.aiKey, model, {
       messages: [
         { role: 'system', content: AUTOPILOT_SYSTEM },
         {
@@ -249,32 +346,157 @@ export async function runAutopilot(userPrompt: string): Promise<Trip> {
       jsonMode: true,
       temperature: 0.8,
       maxTokens: 8000,
+      onToken: (token) => {
+        tokenCount += 1;
+        const current = useUIStore.getState().autopilotProgress;
+        const buffer = (current?.streamPreview || '') + token;
+        const preview = buffer.slice(-280);
+        const now = Date.now();
+        if (now - lastHintAt > 700) {
+          lastHintAt = now;
+          const hints = extractPartialHints(buffer);
+          const hint = hints[hints.length - 1] || 'Streaming itinerary draft…';
+          const pct = Math.min(20, 8 + Math.floor(tokenCount / 40));
+          log(hint, {
+            phase: 'thinking',
+            kind: 'thought',
+            step: 'Autopilot is thinking',
+            percent: pct,
+            streamPreview: preview,
+          });
+        } else {
+          useUIStore.getState().setAutopilotProgress({
+            step: current?.step || 'Autopilot is thinking',
+            detail: current?.detail || 'Streaming…',
+            percent: Math.min(20, 8 + Math.floor(tokenCount / 40)),
+            phase: 'thinking',
+            log: current?.log || [],
+            streamPreview: preview,
+          });
+        }
+      },
     });
 
-    progress('Draft ready', 'Validating itinerary structure…', 18);
+    progress('Draft ready', 'Validating itinerary structure…', 21, 'thinking');
     const raw = extractJSON<unknown>(content);
     const draft = draftTripSchema.parse(raw);
+    log(`Plan locked: ${draft.title} · ${draft.totalDays} days`, {
+      phase: 'thinking',
+      kind: 'success',
+      percent: 22,
+    });
 
     if (draft.progressHints?.length) {
-      progress('On the road', draft.progressHints[0], 22);
+      for (const hint of draft.progressHints.slice(0, 3)) {
+        log(hint, { phase: 'places', kind: 'thought', percent: 23 });
+      }
     }
 
     const trip = await resolveDraftTrip(draft, profile);
     trip.prompt = userPrompt;
 
-    progress('Almost there', 'Syncing map and budget…', 95);
+    progress('Almost there', 'Syncing map and budget…', 96, 'done');
     useTripStore.getState().setActiveTrip(trip);
     useUIStore.getState().setDayFilter('all');
-    progress('Trip ready', trip.title, 100);
+    log(`Trip ready — ${trip.title}`, {
+      phase: 'done',
+      kind: 'success',
+      step: 'Trip ready',
+      percent: 100,
+    });
     return trip;
   } catch (error) {
+    log(friendlyError(error, 'Autopilot could not finish this trip'), {
+      phase: 'error',
+      kind: 'warn',
+      step: 'Something went wrong',
+    });
     throw new Error(friendlyError(error, 'Autopilot could not finish this trip'));
-  } finally {
-    window.setTimeout(() => useUIStore.getState().setAutopilotProgress(null), 800);
   }
 }
 
-export async function runTripEdit(userMessage: string, focusStop?: Stop): Promise<string> {
+export async function generateTripBoard(trip?: Trip | null): Promise<string> {
+  const keys = useKeysStore.getState().keys;
+  if (!keys) throw new Error('Add your API keys first.');
+  if (keys.aiProvider !== 'openai') {
+    throw new Error('Trip Board art uses OpenAI Images — switch to an OpenAI key in Settings.');
+  }
+  const active = trip || useTripStore.getState().activeTrip;
+  if (!active) throw new Error('Create a trip first.');
+
+  log('Painting your Trip Board with OpenAI Images…', {
+    phase: 'board',
+    kind: 'status',
+    step: 'Trip Board',
+    percent: 10,
+  });
+
+  const highlights = active.stops
+    .filter((s) => s.category !== 'fuel' && s.category !== 'origin')
+    .slice(0, 8)
+    .map((s) => s.name)
+    .join(', ');
+
+  const prompt = [
+    'Create a premium editorial travel trip board poster, cinematic and tasteful.',
+    `Trip title: "${active.title}".`,
+    `Vibe: ${active.vibe}.`,
+    `${active.totalDays} days, about ${Math.round(active.totalMiles)} miles.`,
+    `Key places: ${highlights || active.origin.address}.`,
+    'Layout: magazine-style collage mood board with a bold title area, soft landscape photography aesthetic,',
+    'road-trip horizon motif, warm amber and cool teal accents, liquid glass light reflections,',
+    'no logos, no watermarks, no UI chrome, no readable tiny text except a tasteful title treatment.',
+    'Ultra high quality, photoreal scenic collage feel.',
+  ].join(' ');
+
+  const response = await fetch('/api/ai/images', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      apiKey: keys.aiKey,
+      prompt,
+      size: '1536x1024',
+      quality: 'high',
+    }),
+  });
+
+  const data = (await response.json()) as {
+    error?: string;
+    b64?: string;
+    url?: string;
+    model?: string;
+  };
+
+  if (!response.ok) {
+    throw new Error(data.error || 'Trip Board generation failed');
+  }
+
+  const imageUrl = data.b64
+    ? `data:image/png;base64,${data.b64}`
+    : data.url;
+  if (!imageUrl) throw new Error('No image returned from OpenAI');
+
+  useTripStore.getState().updateActiveTrip((t) => ({
+    ...t,
+    boardImageUrl: imageUrl,
+    boardGeneratedAt: new Date().toISOString(),
+  }));
+
+  log(`Trip Board ready${data.model ? ` (${data.model})` : ''}`, {
+    phase: 'board',
+    kind: 'success',
+    step: 'Trip Board',
+    percent: 100,
+  });
+
+  return imageUrl;
+}
+
+export async function runTripEdit(
+  userMessage: string,
+  focusStop?: Stop,
+  onToken?: (token: string) => void,
+): Promise<string> {
   const keys = useKeysStore.getState().keys;
   if (!keys) throw new Error('Add your API keys first.');
   const trip = useTripStore.getState().activeTrip;
@@ -282,7 +504,7 @@ export async function runTripEdit(userMessage: string, focusStop?: Stop): Promis
   const model = useKeysStore.getState().currentModel();
   const provider = getAIProvider(keys.aiProvider);
 
-  const content = await provider.complete(keys.aiKey, model, {
+  const content = await provider.stream(keys.aiKey, model, {
     messages: [
       { role: 'system', content: COPILOT_SYSTEM },
       {
@@ -292,6 +514,7 @@ export async function runTripEdit(userMessage: string, focusStop?: Stop): Promis
     ],
     jsonMode: true,
     temperature: 0.6,
+    onToken,
   });
 
   const parsed = tripEditResponseSchema.parse(extractJSON(content));
@@ -315,7 +538,14 @@ async function applyEditResponse(
     return;
   }
 
-  if (parsed.action === 'reply' && !parsed.stopsToAdd && !parsed.stopIdsToRemove && !parsed.stopUpdates && !parsed.reorder && !parsed.packingList) {
+  if (
+    parsed.action === 'reply' &&
+    !parsed.stopsToAdd &&
+    !parsed.stopIdsToRemove &&
+    !parsed.stopUpdates &&
+    !parsed.reorder &&
+    !parsed.packingList
+  ) {
     return;
   }
 
@@ -356,6 +586,8 @@ async function applyEditResponse(
             priceLevel: resolved.priceLevel,
             hours: resolved.hours,
             photoUrl: resolved.photoUrl,
+            photoUrls: resolved.photoUrls,
+            mapsUrl: resolved.mapsUrl,
             website: resolved.website,
             phone: resolved.phone,
           };
@@ -368,10 +600,9 @@ async function applyEditResponse(
   if (parsed.stopsToAdd?.length) {
     for (const draft of parsed.stopsToAdd) {
       const near = draft.approximateLocation || trip.origin;
-      const resolved = (await searchPlace(draft.searchQuery, near)) || (await searchPlace(draft.name, near));
-      trip.stops.push(
-        draftStopToStop(draft, resolved || { location: near, name: draft.name }),
-      );
+      const resolved =
+        (await searchPlace(draft.searchQuery, near)) || (await searchPlace(draft.name, near));
+      trip.stops.push(draftStopToStop(draft, resolved || { location: near, name: draft.name }));
     }
   }
 
@@ -397,7 +628,15 @@ async function applyEditResponse(
     }));
   }
 
-  trip.days = buildDaysFromStops(trip.stops, trip.days.map((d) => ({ index: d.index, title: d.title, summary: d.summary, date: d.date })));
+  trip.days = buildDaysFromStops(
+    trip.stops,
+    trip.days.map((d) => ({
+      index: d.index,
+      title: d.title,
+      summary: d.summary,
+      date: d.date,
+    })),
+  );
   const legs = await buildDriveLegs(trip.stops, profile.maxDriveHoursPerDay);
   trip = mergeLegsIntoTrip(trip, legs);
   trip = applyBudget(trip, profile, useKeysStore.getState().settings.vehicleMpg);

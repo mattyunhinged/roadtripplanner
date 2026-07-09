@@ -77,6 +77,8 @@ export interface Stop {
   priceLevel?: number;
   hours?: string;
   photoUrl?: string;
+  photoUrls?: string[];
+  mapsUrl?: string;
   costEstimate?: number;
   aiNotes?: string;
   website?: string;
@@ -136,6 +138,8 @@ export interface Trip {
   createdAt: string;
   updatedAt: string;
   packingList?: PackingItem[];
+  boardImageUrl?: string;
+  boardGeneratedAt?: string;
 }
 
 export interface PackingItem {
@@ -153,10 +157,23 @@ export interface ChatMessage {
   tripPatchApplied?: boolean;
 }
 
+export type AutopilotPhase = 'idle' | 'thinking' | 'places' | 'routing' | 'budget' | 'board' | 'done' | 'error';
+
+export interface AutopilotLogEntry {
+  id: string;
+  at: number;
+  phase: AutopilotPhase;
+  text: string;
+  kind?: 'status' | 'thought' | 'place' | 'route' | 'success' | 'warn';
+}
+
 export interface AutopilotProgress {
   step: string;
   detail: string;
   percent: number;
+  phase: AutopilotPhase;
+  log: AutopilotLogEntry[];
+  streamPreview?: string;
 }
 
 export interface TripPatch {

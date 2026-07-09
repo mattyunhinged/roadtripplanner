@@ -108,7 +108,8 @@ export function KeySetupScreen() {
           </div>
         </div>
 
-        <div className="glass-panel w-full max-w-md rounded-3xl p-6 md:p-8">
+        <div className="liquid-composer w-full max-w-md rounded-[28px] p-6 md:p-8">
+          <div className="relative z-10">
           <div className="mb-6 flex items-center gap-2 text-sm font-medium text-[var(--fg-muted)]">
             <KeyRound className="h-4 w-4" /> First launch setup
           </div>
@@ -194,6 +195,7 @@ export function KeySetupScreen() {
             >
               Continue
             </Button>
+          </div>
           </div>
         </div>
       </div>

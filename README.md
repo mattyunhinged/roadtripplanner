@@ -6,9 +6,12 @@ Premium AI roadtrip planner with Autopilot mode. Enter your own API keys, set yo
 
 - **API key setup** with OpenAI or Anthropic (auto-detected) + Google Maps validation
 - **Traveler onboarding** (home, style, interests, budget, lodging, drive limits, party)
-- **Autopilot AI** — one-sentence prompts become full day-by-day itineraries
+- **Live Autopilot stream** — real-time progress log while the model thinks, Places resolve, and routes draw
+- **Liquid glass UI** — frosted composers, panels, and overlays across the app
+- **Trip Board export** — OpenAI Images poster when an OpenAI key is set, plus Places photo strips
+- **Places photos & Maps links** — real Google photos on stops; click through to Google Maps
 - **Manual planning** with Places search, map-click stops, drag-and-drop reorder
-- **Ask AI / Copilot chat** that edits the itinerary and map in place
+- **Ask AI / Copilot chat** with live streaming replies that edit the itinerary and map
 - **Budget estimates**, fuel suggestions, packing lists, export/print, Google Maps deep links
 - **Trip library**, light/dark themes, responsive map + itinerary layout
 

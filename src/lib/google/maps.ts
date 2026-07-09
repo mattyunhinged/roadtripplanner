@@ -44,8 +44,23 @@ export interface ResolvedPlace {
   priceLevel?: number;
   hours?: string;
   photoUrl?: string;
+  photoUrls?: string[];
+  mapsUrl?: string;
   website?: string;
   phone?: string;
+}
+
+export function placeMapsUrl(place: {
+  placeId?: string;
+  name?: string;
+  address?: string;
+  location: LatLng;
+}): string {
+  if (place.placeId) {
+    return `https://www.google.com/maps/place/?q=place_id:${place.placeId}`;
+  }
+  const q = encodeURIComponent(place.address || place.name || `${place.location.lat},${place.location.lng}`);
+  return `https://www.google.com/maps/search/?api=1&query=${q}`;
 }
 
 function getMaps(): typeof google.maps {
@@ -117,14 +132,20 @@ export async function geocodeAddress(address: string): Promise<ResolvedPlace | n
   const response = await geocoder.geocode({ address });
   const result = response.results[0];
   if (!result) return null;
+  const location = {
+    lat: result.geometry.location.lat(),
+    lng: result.geometry.location.lng(),
+  };
   return {
     placeId: result.place_id,
     name: result.formatted_address,
     address: result.formatted_address,
-    location: {
-      lat: result.geometry.location.lat(),
-      lng: result.geometry.location.lng(),
-    },
+    location,
+    mapsUrl: placeMapsUrl({
+      placeId: result.place_id,
+      address: result.formatted_address,
+      location,
+    }),
   };
 }
 
@@ -139,6 +160,11 @@ export async function reverseGeocode(location: LatLng): Promise<ResolvedPlace | 
     name: result.formatted_address,
     address: result.formatted_address,
     location,
+    mapsUrl: placeMapsUrl({
+      placeId: result.place_id,
+      address: result.formatted_address,
+      location,
+    }),
   };
 }
 
@@ -214,10 +240,13 @@ export async function getPlaceDetails(placeId: string): Promise<ResolvedPlace | 
           resolve(null);
           return;
         }
-        const photoUrl = place.photos?.[0]?.getUrl({ maxWidth: 800, maxHeight: 600 });
+        const photoUrls =
+          place.photos?.slice(0, 4).map((p) => p.getUrl({ maxWidth: 1200, maxHeight: 900 })) || [];
+        const photoUrl = photoUrls[0];
         const hours = place.opening_hours?.weekday_text?.join(' · ');
+        const resolvedPlaceId = place.place_id || placeId;
         resolve({
-          placeId: place.place_id || placeId,
+          placeId: resolvedPlaceId,
           name: place.name || 'Unknown place',
           location: {
             lat: place.geometry.location.lat(),
@@ -228,6 +257,16 @@ export async function getPlaceDetails(placeId: string): Promise<ResolvedPlace | 
           priceLevel: place.price_level,
           hours,
           photoUrl,
+          photoUrls,
+          mapsUrl: placeMapsUrl({
+            placeId: resolvedPlaceId,
+            name: place.name,
+            address: place.formatted_address,
+            location: {
+              lat: place.geometry.location.lat(),
+              lng: place.geometry.location.lng(),
+            },
+          }),
           website: place.website,
           phone: place.formatted_phone_number,
         });

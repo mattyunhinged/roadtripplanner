@@ -54,6 +54,9 @@ export function PlannerScreen() {
           address: place?.address,
           dayIndex,
           order,
+          photoUrl: place?.photoUrl,
+          photoUrls: place?.photoUrls,
+          mapsUrl: place?.mapsUrl,
           aiNotes: 'Added from map click',
         };
         addStop(stop);
@@ -87,6 +90,8 @@ export function PlannerScreen() {
         priceLevel: place.priceLevel,
         hours: place.hours,
         photoUrl: place.photoUrl,
+        photoUrls: place.photoUrls,
+        mapsUrl: place.mapsUrl,
         aiNotes: 'Added via search',
       });
       await recalculateRoutes();
@@ -129,15 +134,15 @@ export function PlannerScreen() {
           <TripMap onMapClickAdd={onMapClickAdd} />
 
           <div className="no-print absolute left-4 top-24 z-10 flex max-w-md flex-col gap-2 md:left-6">
-            <div className="glass-panel flex gap-2 rounded-2xl p-2">
+            <div className="liquid-composer flex gap-2 rounded-2xl p-2">
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && addFromSearch()}
                 placeholder="Search places to add…"
-                className="h-10 flex-1 bg-transparent px-2 text-sm outline-none"
+                className="relative z-10 h-10 flex-1 bg-transparent px-2 text-sm outline-none"
               />
-              <Button size="sm" variant="secondary" onClick={addFromSearch}>
+              <Button size="sm" variant="secondary" className="relative z-10" onClick={addFromSearch}>
                 <Plus className="h-4 w-4" />
               </Button>
             </div>
@@ -177,7 +182,7 @@ export function PlannerScreen() {
         </div>
 
         {/* Desktop itinerary */}
-        <aside className="no-print hidden w-[var(--panel-width)] shrink-0 border-l border-[var(--border)] bg-[var(--bg-elevated)] md:block">
+        <aside className="no-print glass-strong hidden w-[var(--panel-width)] shrink-0 border-l border-[var(--glass-border)] md:block">
           <ItineraryPanel />
         </aside>
       </div>
@@ -188,7 +193,7 @@ export function PlannerScreen() {
         animate={{ height: mobileSheetExpanded ? '70%' : 120 }}
         transition={{ type: 'spring', stiffness: 280, damping: 30 }}
       >
-        <div className="flex h-full flex-col overflow-hidden rounded-t-3xl border border-[var(--border)] bg-[var(--bg-elevated)] shadow-2xl">
+        <div className="flex h-full flex-col overflow-hidden rounded-t-3xl glass-strong border border-[var(--glass-border)] shadow-2xl">
           <button
             type="button"
             className="flex w-full flex-col items-center px-4 pt-3"
@@ -207,7 +212,7 @@ export function PlannerScreen() {
           <div className="min-h-0 flex-1 overflow-hidden">
             {mobileSheetExpanded && <ItineraryPanel />}
           </div>
-          <div className="flex gap-2 border-t border-[var(--border)] p-3">
+          <div className="flex gap-2 border-t border-[var(--glass-border-inner)] p-3">
             <Button size="sm" variant="accent" className="flex-1" onClick={() => setAutopilotOpen(true)}>
               <Sparkles className="h-4 w-4" /> Autopilot
             </Button>

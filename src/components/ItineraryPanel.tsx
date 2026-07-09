@@ -50,7 +50,7 @@ function SortableStop({ stop }: { stop: Stop }) {
       className={cn(
         'group flex gap-3 rounded-2xl border border-transparent p-2 transition',
         (hoveredStopId === stop.id || selectedStopId === stop.id) &&
-          'border-[var(--border-strong)] bg-[var(--bg-muted)]',
+          'border-[var(--glass-border)] glass-soft',
         isDragging && 'opacity-80 shadow-lg',
       )}
       onMouseEnter={() => setHoveredStopId(stop.id)}
@@ -66,13 +66,16 @@ function SortableStop({ stop }: { stop: Stop }) {
         <GripVertical className="h-4 w-4" />
       </button>
       <div
-        className="mt-1 h-10 w-10 shrink-0 overflow-hidden rounded-xl"
+        className="mt-1 h-12 w-12 shrink-0 overflow-hidden rounded-xl"
         style={{ background: `${CATEGORY_COLORS[stop.category]}33` }}
       >
         {stop.photoUrl ? (
           <img src={stop.photoUrl} alt="" className="h-full w-full object-cover" />
         ) : (
-          <div className="flex h-full items-center justify-center text-[10px] font-bold" style={{ color: CATEGORY_COLORS[stop.category] }}>
+          <div
+            className="flex h-full items-center justify-center text-[10px] font-bold"
+            style={{ color: CATEGORY_COLORS[stop.category] }}
+          >
             {categoryLabel(stop.category).slice(0, 3).toUpperCase()}
           </div>
         )}
@@ -80,7 +83,21 @@ function SortableStop({ stop }: { stop: Stop }) {
       <div className="min-w-0 flex-1">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <div className="truncate font-medium">{stop.name}</div>
+            <div className="truncate font-medium">
+              {stop.mapsUrl ? (
+                <a
+                  href={stop.mapsUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="hover:text-[var(--accent)] hover:underline"
+                >
+                  {stop.name}
+                </a>
+              ) : (
+                stop.name
+              )}
+            </div>
             <div className="mt-0.5 flex flex-wrap gap-2 text-xs text-[var(--fg-subtle)]">
               <span>{categoryLabel(stop.category)}</span>
               {stop.timeWindow && <span>{stop.timeWindow}</span>}
@@ -93,6 +110,18 @@ function SortableStop({ stop }: { stop: Stop }) {
               {stop.costEstimate != null && <span>{formatCurrency(stop.costEstimate)}</span>}
             </div>
           </div>
+          {stop.mapsUrl && (
+            <a
+              href={stop.mapsUrl}
+              target="_blank"
+              rel="noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="shrink-0 rounded-full p-1.5 text-[var(--fg-subtle)] hover:bg-[var(--glass-soft)] hover:text-[var(--accent)]"
+              title="Open in Google Maps"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+            </a>
+          )}
         </div>
         {stop.aiNotes && (
           <p className="mt-1 line-clamp-2 text-xs text-[var(--fg-muted)]">{stop.aiNotes}</p>
@@ -173,7 +202,7 @@ export function ItineraryPanel() {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="border-b border-[var(--border)] px-5 py-4">
+      <div className="border-b border-[var(--glass-border-inner)] px-5 py-4">
         <div className="text-xs uppercase tracking-[0.18em] text-[var(--fg-subtle)]">Trip</div>
         <h2 className="font-display text-2xl leading-tight">{trip.title}</h2>
         {trip.vibe && <p className="mt-1 text-sm text-[var(--fg-muted)]">{trip.vibe}</p>}
@@ -187,10 +216,10 @@ export function ItineraryPanel() {
             type="button"
             onClick={() => setDayFilter('all')}
             className={cn(
-              'rounded-full px-3 py-1 text-xs',
+              'rounded-full px-3 py-1 text-xs transition',
               dayFilter === 'all'
                 ? 'bg-[var(--fg)] text-[var(--bg)]'
-                : 'bg-[var(--bg-muted)] text-[var(--fg-muted)]',
+                : 'glass-soft text-[var(--fg-muted)]',
             )}
           >
             All days
@@ -201,10 +230,10 @@ export function ItineraryPanel() {
               type="button"
               onClick={() => setDayFilter(day.index)}
               className={cn(
-                'rounded-full px-3 py-1 text-xs',
+                'rounded-full px-3 py-1 text-xs transition',
                 dayFilter === day.index
                   ? 'bg-[var(--fg)] text-[var(--bg)]'
-                  : 'bg-[var(--bg-muted)] text-[var(--fg-muted)]',
+                  : 'glass-soft text-[var(--fg-muted)]',
               )}
             >
               Day {day.index + 1}
@@ -244,7 +273,7 @@ export function ItineraryPanel() {
                   href={googleMapsDayUrl(stops)}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex items-center gap-1 rounded-full bg-[var(--bg-muted)] px-2.5 py-1 text-xs text-[var(--fg-muted)] hover:text-[var(--fg)]"
+                  className="inline-flex items-center gap-1 rounded-full glass-soft px-2.5 py-1 text-xs text-[var(--fg-muted)] hover:text-[var(--fg)]"
                 >
                   Open in Maps <ExternalLink className="h-3 w-3" />
                 </a>
@@ -293,7 +322,7 @@ export function ItineraryPanel() {
         })}
       </div>
 
-      <div className="border-t border-[var(--border)] px-5 py-3 text-xs text-[var(--fg-subtle)]">
+      <div className="border-t border-[var(--glass-border-inner)] px-5 py-3 text-xs text-[var(--fg-subtle)]">
         Budget · Fuel {formatCurrency(trip.budget.fuel)} · Lodging{' '}
         {formatCurrency(trip.budget.lodging)} · Food {formatCurrency(trip.budget.food)} · Activities{' '}
         {formatCurrency(trip.budget.activities)}

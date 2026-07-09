@@ -86,6 +86,93 @@ app.post('/api/ai/validate', async (req, res) => {
   }
 });
 
+app.post('/api/ai/images', async (req, res) => {
+  try {
+    const { apiKey, prompt, size, quality, model } = req.body as {
+      apiKey: string;
+      prompt: string;
+      size?: string;
+      quality?: string;
+      model?: string;
+    };
+    if (!apiKey || !prompt) {
+      return badRequest(res, 'apiKey and prompt are required');
+    }
+
+    const response = await fetch('https://api.openai.com/v1/images/generations', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: model || 'gpt-image-1',
+        prompt,
+        n: 1,
+        size: size || '1536x1024',
+        quality: quality || 'high',
+      }),
+    });
+
+    const data = (await response.json()) as {
+      error?: { message?: string };
+      data?: { b64_json?: string; url?: string; revised_prompt?: string }[];
+    };
+
+    if (!response.ok) {
+      // Fallback to dall-e-3 if gpt-image-1 unavailable
+      if (response.status === 404 || data.error?.message?.toLowerCase().includes('model')) {
+        const fallback = await fetch('https://api.openai.com/v1/images/generations', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: 'dall-e-3',
+            prompt: prompt.slice(0, 3900),
+            n: 1,
+            size: '1792x1024',
+            quality: 'hd',
+            response_format: 'b64_json',
+          }),
+        });
+        const fallbackData = (await fallback.json()) as {
+          error?: { message?: string };
+          data?: { b64_json?: string; url?: string }[];
+        };
+        if (!fallback.ok) {
+          return res.status(fallback.status).json({
+            error: fallbackData.error?.message || 'Image generation failed',
+          });
+        }
+        const img = fallbackData.data?.[0];
+        return res.json({
+          b64: img?.b64_json,
+          url: img?.url,
+          model: 'dall-e-3',
+        });
+      }
+      return res.status(response.status).json({
+        error: data.error?.message || 'Image generation failed',
+      });
+    }
+
+    const img = data.data?.[0];
+    return res.json({
+      b64: img?.b64_json,
+      url: img?.url,
+      revisedPrompt: img?.revised_prompt,
+      model: model || 'gpt-image-1',
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({
+      error: error instanceof Error ? error.message : 'Image generation failed',
+    });
+  }
+});
+
 app.post('/api/ai/complete', async (req, res) => {
   try {
     const body = req.body as AIRequestBody;

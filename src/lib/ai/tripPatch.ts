@@ -46,11 +46,12 @@ export function createEmptyTrip(partial?: Partial<Trip>): Trip {
 }
 
 export function draftStopToStop(draft: DraftStop, resolved?: Partial<Stop>): Stop {
+  const location = resolved?.location || draft.approximateLocation || { lat: 0, lng: 0 };
   return {
     id: uuid(),
     name: resolved?.name || draft.name,
     category: draft.category,
-    location: resolved?.location || draft.approximateLocation || { lat: 0, lng: 0 },
+    location,
     placeId: resolved?.placeId,
     address: resolved?.address,
     dayIndex: draft.dayIndex,
@@ -60,6 +61,12 @@ export function draftStopToStop(draft: DraftStop, resolved?: Partial<Stop>): Sto
     priceLevel: resolved?.priceLevel,
     hours: resolved?.hours,
     photoUrl: resolved?.photoUrl,
+    photoUrls: resolved?.photoUrls,
+    mapsUrl:
+      resolved?.mapsUrl ||
+      (resolved?.placeId
+        ? `https://www.google.com/maps/place/?q=place_id:${resolved.placeId}`
+        : `https://www.google.com/maps/search/?api=1&query=${location.lat},${location.lng}`),
     costEstimate: draft.costEstimate ?? resolved?.costEstimate,
     aiNotes: draft.aiNotes,
     website: resolved?.website,

@@ -56,7 +56,7 @@ export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElem
     <input
       {...props}
       className={cn(
-        'w-full h-11 rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] px-3 text-[var(--fg)] outline-none placeholder:text-[var(--fg-subtle)] focus:border-[var(--accent)]',
+        'glass-input w-full h-11 rounded-xl px-3 text-[var(--fg)] outline-none placeholder:text-[var(--fg-subtle)]',
         className,
       )}
     />
@@ -68,7 +68,7 @@ export function TextArea({ className, ...props }: TextareaHTMLAttributes<HTMLTex
     <textarea
       {...props}
       className={cn(
-        'w-full min-h-[96px] rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2.5 text-[var(--fg)] outline-none placeholder:text-[var(--fg-subtle)] focus:border-[var(--accent)] resize-y',
+        'glass-input w-full min-h-[96px] rounded-xl px-3 py-2.5 text-[var(--fg)] outline-none placeholder:text-[var(--fg-subtle)] resize-y',
         className,
       )}
     />

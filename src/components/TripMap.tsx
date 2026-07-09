@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { APIProvider, Map, useMap } from '@vis.gl/react-google-maps';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Replace, Sparkles, Star, Trash2, X } from 'lucide-react';
+import { Replace, Sparkles, Star, Trash2, X, ExternalLink } from 'lucide-react';
 import { Button, Spinner } from '@/components/ui';
 import { MAP_STYLES_DARK, MAP_STYLES_LIGHT, decodePolyline } from '@/lib/google/maps';
 import { runAskAi } from '@/lib/ai/engine';
 import { categoryLabel } from '@/lib/ai/tripPatch';
-import { formatCurrency, priceLevelLabel } from '@/lib/utils';
+import { cn, formatCurrency, priceLevelLabel } from '@/lib/utils';
 import { useKeysStore } from '@/stores/keysStore';
 import { useProfileStore } from '@/stores/profileStore';
 import { useTripStore } from '@/stores/tripStore';
@@ -138,6 +138,9 @@ function PlaceCard({ stop, onClose }: { stop: Stop; onClose: () => void }) {
   const showToast = useUIStore((s) => s.showToast);
   const [asking, setAsking] = useState(false);
   const [askText, setAskText] = useState('');
+  const [photoIndex, setPhotoIndex] = useState(0);
+  const photos = stop.photoUrls?.length ? stop.photoUrls : stop.photoUrl ? [stop.photoUrl] : [];
+  const activePhoto = photos[photoIndex] || photos[0];
 
   async function ask() {
     if (!askText.trim()) return;
@@ -158,12 +161,37 @@ function PlaceCard({ stop, onClose }: { stop: Stop; onClose: () => void }) {
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: 8 }}
-      className="glass-panel absolute bottom-4 left-4 right-4 z-20 max-w-md overflow-hidden rounded-3xl md:left-6 md:right-auto"
+      className="glass-strong absolute bottom-4 left-4 right-4 z-20 max-w-md overflow-hidden rounded-3xl md:left-6 md:right-auto"
     >
-      {stop.photoUrl ? (
-        <div className="relative h-40 w-full overflow-hidden">
-          <img src={stop.photoUrl} alt={stop.name} className="h-full w-full object-cover" />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
+      {activePhoto ? (
+        <div className="relative h-44 w-full overflow-hidden">
+          <img src={activePhoto} alt={stop.name} className="h-full w-full object-cover" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/55 to-transparent" />
+          {photos.length > 1 && (
+            <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-1.5">
+              {photos.map((_, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => setPhotoIndex(i)}
+                  className={cn(
+                    'h-1.5 rounded-full transition',
+                    i === photoIndex ? 'w-4 bg-white' : 'w-1.5 bg-white/50',
+                  )}
+                />
+              ))}
+            </div>
+          )}
+          {stop.mapsUrl && (
+            <a
+              href={stop.mapsUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full glass-strong px-2.5 py-1 text-xs text-[var(--fg)]"
+            >
+              Maps <ExternalLink className="h-3 w-3" />
+            </a>
+          )}
         </div>
       ) : (
         <div
@@ -173,13 +201,21 @@ function PlaceCard({ stop, onClose }: { stop: Stop; onClose: () => void }) {
           }}
         />
       )}
-      <div className="p-4">
+      <div className="relative z-10 p-4">
         <div className="flex items-start justify-between gap-3">
           <div>
             <div className="text-xs uppercase tracking-wider text-[var(--fg-subtle)]">
               {categoryLabel(stop.category)} · Day {stop.dayIndex + 1}
             </div>
-            <h3 className="font-display text-xl">{stop.name}</h3>
+            <h3 className="font-display text-xl">
+              {stop.mapsUrl ? (
+                <a href={stop.mapsUrl} target="_blank" rel="noreferrer" className="hover:underline">
+                  {stop.name}
+                </a>
+              ) : (
+                stop.name
+              )}
+            </h3>
             {stop.address && <p className="mt-1 text-sm text-[var(--fg-muted)]">{stop.address}</p>}
           </div>
           <button type="button" onClick={onClose} className="rounded-full p-1 hover:bg-[var(--bg-muted)]">
@@ -199,11 +235,21 @@ function PlaceCard({ stop, onClose }: { stop: Stop; onClose: () => void }) {
         </div>
         {stop.hours && <p className="mt-2 line-clamp-2 text-xs text-[var(--fg-subtle)]">{stop.hours}</p>}
         {stop.aiNotes && (
-          <p className="mt-3 rounded-2xl bg-[var(--bg-muted)] px-3 py-2 text-sm text-[var(--fg-muted)]">
+          <p className="mt-3 rounded-2xl glass-soft px-3 py-2 text-sm text-[var(--fg-muted)]">
             {stop.aiNotes}
           </p>
         )}
         <div className="mt-3 flex flex-wrap gap-2">
+          {stop.mapsUrl && (
+            <a
+              href={stop.mapsUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex h-9 items-center gap-2 rounded-xl glass-soft px-3 text-sm"
+            >
+              <ExternalLink className="h-3.5 w-3.5" /> Google Maps
+            </a>
+          )}
           <Button
             size="sm"
             variant="secondary"
@@ -241,7 +287,7 @@ function PlaceCard({ stop, onClose }: { stop: Stop; onClose: () => void }) {
             value={askText}
             onChange={(e) => setAskText(e.target.value)}
             placeholder="Ask AI about this stop…"
-            className="h-10 flex-1 rounded-xl border border-[var(--border)] bg-[var(--bg)] px-3 text-sm outline-none focus:border-[var(--accent)]"
+            className="glass-input h-10 flex-1 rounded-xl px-3 text-sm outline-none"
           />
           <Button size="sm" variant="accent" onClick={ask} disabled={asking}>
             {asking ? <Spinner className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
