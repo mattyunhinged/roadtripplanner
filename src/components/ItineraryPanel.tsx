@@ -78,7 +78,7 @@ function SortableStopCard({ stop }: { stop: Stop }) {
 
         <button
           type="button"
-          className="absolute left-2 top-2 rounded-full bg-black/35 p-1.5 text-white/80 backdrop-blur-md active:cursor-grabbing"
+          className="absolute left-2 top-2 rounded-full bg-black/45 p-1.5 text-white/90 active:cursor-grabbing"
           {...attributes}
           {...listeners}
           onClick={(e) => e.stopPropagation()}
@@ -88,13 +88,13 @@ function SortableStopCard({ stop }: { stop: Stop }) {
 
         <div className="absolute right-2 top-2 flex gap-1.5">
           {stop.isSideQuest && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-[var(--color-sky)]/90 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white backdrop-blur">
+            <span className="inline-flex items-center gap-1 rounded-full bg-[var(--color-sky)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
               <Compass className="h-3 w-3" /> Side quest
             </span>
           )}
           <span
-            className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white backdrop-blur"
-            style={{ background: `${CATEGORY_COLORS[stop.category]}cc` }}
+            className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white"
+            style={{ background: CATEGORY_COLORS[stop.category] }}
           >
             {categoryLabel(stop.category)}
           </span>
@@ -115,7 +115,7 @@ function SortableStopCard({ stop }: { stop: Stop }) {
             </div>
             <div className="flex shrink-0 items-center gap-1.5">
               {stop.rating != null && (
-                <span className="inline-flex items-center gap-0.5 rounded-full bg-black/35 px-1.5 py-0.5 text-[10px] backdrop-blur">
+                <span className="inline-flex items-center gap-0.5 rounded-full bg-black/45 px-1.5 py-0.5 text-[10px]">
                   <Star className="h-3 w-3 fill-[var(--accent)] text-[var(--accent)]" />
                   {stop.rating.toFixed(1)}
                 </span>
@@ -126,7 +126,7 @@ function SortableStopCard({ stop }: { stop: Stop }) {
                   target="_blank"
                   rel="noreferrer"
                   onClick={(e) => e.stopPropagation()}
-                  className="rounded-full bg-white/20 p-1.5 backdrop-blur hover:bg-white/35"
+                  className="rounded-full bg-black/45 p-1.5 hover:bg-black/60"
                 >
                   <ExternalLink className="h-3.5 w-3.5" />
                 </a>
@@ -143,7 +143,7 @@ function DriveChip({ leg, onAsk }: { leg: DriveLeg; onAsk: () => void }) {
   return (
     <div className="my-2 flex items-center justify-between gap-2 px-1">
       <div className="flex flex-wrap items-center gap-2 text-[11px] text-[var(--fg-subtle)]">
-        <span className="h-px w-4 bg-[var(--glass-border)]" />
+        <span className="h-px w-4 bg-[var(--border)]" />
         <span>
           {formatMiles(leg.distanceMeters)} · {formatDuration(leg.durationSeconds)}
         </span>
@@ -153,12 +153,12 @@ function DriveChip({ leg, onAsk }: { leg: DriveLeg; onAsk: () => void }) {
           </span>
         )}
         {leg.fuelSuggested && <span className="text-[var(--color-sand)]">fuel up</span>}
-        <span className="h-px flex-1 min-w-4 bg-[var(--glass-border)]" />
+        <span className="h-px flex-1 min-w-4 bg-[var(--border)]" />
       </div>
       <button
         type="button"
         onClick={onAsk}
-        className="inline-flex shrink-0 items-center gap-1 rounded-full glass-soft px-2 py-1 text-[10px] text-[var(--fg-muted)] hover:text-[var(--fg)]"
+        className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[var(--bg-muted)] px-2 py-1 text-[10px] text-[var(--fg-muted)] hover:text-[var(--fg)]"
       >
         <Sparkles className="h-3 w-3 text-[var(--accent)]" /> detour?
       </button>
@@ -291,7 +291,7 @@ export function ItineraryPanel() {
   return (
     <div className="flex h-full flex-col">
       {/* Visual trip header */}
-      <div className="relative shrink-0 overflow-hidden border-b border-[var(--glass-border-inner)]">
+      <div className="relative shrink-0 overflow-hidden border-b border-[var(--border)]">
         {heroPhotos.length > 0 ? (
           <div className="grid h-28 grid-cols-4 gap-0.5">
             {heroPhotos.map((s) => (
@@ -299,9 +299,9 @@ export function ItineraryPanel() {
             ))}
           </div>
         ) : (
-          <div className="h-20 bg-gradient-to-br from-[var(--accent)]/20 via-[var(--color-sky)]/15 to-transparent" />
+          <div className="h-16 bg-[var(--bg-muted)]" />
         )}
-        <div className="absolute inset-0 bg-gradient-to-t from-[var(--glass-strong)] via-[var(--glass)]/80 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[var(--bg-elevated)] via-[var(--bg-elevated)]/85 to-transparent" />
         <div className="relative px-5 pb-3 pt-2">
           <div className="text-[10px] uppercase tracking-[0.18em] text-[var(--fg-subtle)]">
             your trip
@@ -311,11 +311,11 @@ export function ItineraryPanel() {
             <p className="mt-0.5 line-clamp-2 text-xs text-[var(--fg-muted)]">{trip.vibe}</p>
           )}
           <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
-            <span className="rounded-full glass-soft px-2 py-0.5">{trip.totalDays}d</span>
-            <span className="rounded-full glass-soft px-2 py-0.5">
+            <span className="rounded-full bg-[var(--bg-muted)] px-2 py-0.5">{trip.totalDays}d</span>
+            <span className="rounded-full bg-[var(--bg-muted)] px-2 py-0.5">
               {Math.round(trip.totalMiles)} mi
             </span>
-            <span className="rounded-full glass-soft px-2 py-0.5">
+            <span className="rounded-full bg-[var(--bg-muted)] px-2 py-0.5">
               {formatCurrency(trip.budget.total)}
             </span>
           </div>
@@ -327,7 +327,7 @@ export function ItineraryPanel() {
                 'rounded-full px-2.5 py-1 text-[11px] transition',
                 dayFilter === 'all'
                   ? 'bg-[var(--fg)] text-[var(--bg)]'
-                  : 'glass-soft text-[var(--fg-muted)]',
+                  : 'bg-[var(--bg-muted)] text-[var(--fg-muted)]',
               )}
             >
               All
@@ -341,7 +341,7 @@ export function ItineraryPanel() {
                   'rounded-full px-2.5 py-1 text-[11px] transition',
                   dayFilter === day.index
                     ? 'bg-[var(--fg)] text-[var(--bg)]'
-                    : 'glass-soft text-[var(--fg-muted)]',
+                    : 'bg-[var(--bg-muted)] text-[var(--fg-muted)]',
                 )}
               >
                 D{day.index + 1}
@@ -353,7 +353,7 @@ export function ItineraryPanel() {
 
       <div className="flex-1 overflow-y-auto px-3 py-3">
         {busy && (
-          <div className="mb-2 rounded-xl glass-soft px-3 py-2 text-xs text-[var(--fg-muted)]">
+          <div className="mb-2 rounded-xl bg-[var(--bg-muted)] px-3 py-2 text-xs text-[var(--fg-muted)]">
             Recalculating the vibes…
           </div>
         )}
@@ -388,7 +388,7 @@ export function ItineraryPanel() {
                   href={googleMapsDayUrl(allDayStops)}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex items-center gap-1 rounded-full glass-soft px-2.5 py-1 text-[11px] text-[var(--fg-muted)] hover:text-[var(--fg)]"
+                  className="inline-flex items-center gap-1 rounded-full bg-[var(--bg-muted)] px-2.5 py-1 text-[11px] text-[var(--fg-muted)] hover:text-[var(--fg)]"
                 >
                   Maps <ExternalLink className="h-3 w-3" />
                 </a>
@@ -445,7 +445,7 @@ export function ItineraryPanel() {
         })}
       </div>
 
-      <div className="border-t border-[var(--glass-border-inner)] px-4 py-2.5 text-[10px] text-[var(--fg-subtle)]">
+      <div className="border-t border-[var(--border)] px-4 py-2.5 text-[10px] text-[var(--fg-subtle)]">
         fuel {formatCurrency(trip.budget.fuel)} · stay {formatCurrency(trip.budget.lodging)} · eats{' '}
         {formatCurrency(trip.budget.food)} · fun {formatCurrency(trip.budget.activities)}
       </div>

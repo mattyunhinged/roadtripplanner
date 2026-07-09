@@ -76,7 +76,7 @@ export function AutopilotModal() {
     <AnimatePresence>
       {open && (
         <motion.div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-[var(--bg-overlay)] p-4 backdrop-blur-sm sm:items-center no-print"
+          className="fixed inset-0 z-50 flex items-end justify-center bg-[var(--bg-overlay)] p-4 sm:items-center no-print"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -87,15 +87,12 @@ export function AutopilotModal() {
             animate={{ y: 0, opacity: 1, scale: 1 }}
             exit={{ y: 20, opacity: 0 }}
             onClick={(e) => e.stopPropagation()}
-            className="liquid-composer relative w-full max-w-2xl overflow-hidden rounded-[28px] p-6 md:p-7"
+            className="relative w-full max-w-2xl overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--bg-elevated)] p-6 shadow-[var(--shadow-soft)] md:p-7"
           >
-            <div className="liquid-orb left-[-10%] top-[-20%] h-40 w-40 bg-[var(--color-amber)]/30" />
-            <div className="liquid-orb right-[-5%] bottom-[-30%] h-48 w-48 bg-[var(--color-sky)]/25" />
-
             <div className="relative z-10">
               <div className="mb-5 flex items-start justify-between gap-3">
                 <div>
-                  <div className="inline-flex items-center gap-2 rounded-full glass-soft px-3 py-1 text-sm text-[var(--accent)]">
+                  <div className="inline-flex items-center gap-2 rounded-full bg-[var(--bg-muted)] px-3 py-1 text-sm text-[var(--accent)]">
                     <Sparkles className="h-4 w-4" /> Autopilot
                     {running && (
                       <span className="ml-1 inline-flex items-center gap-1 text-[var(--fg-muted)]">
@@ -121,7 +118,7 @@ export function AutopilotModal() {
                     setOpen(false);
                     clearProgress();
                   }}
-                  className="rounded-full glass-soft p-2 hover:bg-[var(--glass-strong)]"
+                  className="rounded-full bg-[var(--bg-muted)] p-2 hover:bg-[var(--bg)]"
                 >
                   <X className="h-4 w-4" />
                 </button>
@@ -142,7 +139,7 @@ export function AutopilotModal() {
                         key={s}
                         type="button"
                         onClick={() => start(s)}
-                        className="rounded-2xl glass-soft px-3 py-3 text-left text-sm text-[var(--fg-muted)] transition hover:text-[var(--fg)] hover:ring-1 hover:ring-[var(--accent)]/40"
+                        className="rounded-2xl bg-[var(--bg-muted)] px-3 py-3 text-left text-sm text-[var(--fg-muted)] transition hover:text-[var(--fg)] hover:ring-1 hover:ring-[var(--accent)]/40"
                       >
                         {s}
                       </button>
@@ -153,7 +150,7 @@ export function AutopilotModal() {
 
               {running && progress && (
                 <div className="mt-1 space-y-4">
-                  <div className="overflow-hidden rounded-3xl glass-soft">
+                  <div className="overflow-hidden rounded-2xl bg-[var(--bg-muted)]">
                     <div className="relative h-2 overflow-hidden bg-black/10 dark:bg-white/10">
                       <motion.div
                         className="h-full rounded-full bg-gradient-to-r from-[var(--accent)] via-[var(--color-sky)] to-[var(--color-sage)]"
@@ -169,7 +166,7 @@ export function AutopilotModal() {
 
                   <div
                     ref={logRef}
-                    className="max-h-64 space-y-1 overflow-y-auto rounded-3xl glass-soft p-3"
+                    className="max-h-64 space-y-1 overflow-y-auto rounded-2xl bg-[var(--bg-muted)] p-3"
                   >
                     {progress.log.map((entry) => (
                       <div
@@ -192,7 +189,7 @@ export function AutopilotModal() {
                       </div>
                     ))}
                     {progress.streamPreview && progress.phase === 'thinking' && (
-                      <div className="mt-2 rounded-2xl border border-[var(--glass-border-inner)] bg-black/5 p-2.5 font-mono text-[10px] leading-relaxed text-[var(--fg-subtle)] dark:bg-white/5">
+                      <div className="mt-2 rounded-2xl border border-[var(--border)] bg-[var(--bg)] p-2.5 font-mono text-[10px] leading-relaxed text-[var(--fg-subtle)] dark:bg-white/5">
                         <div className="mb-1 flex items-center gap-1 text-[var(--accent)]">
                           <Camera className="h-3 w-3" /> brain dump
                         </div>
@@ -203,13 +200,13 @@ export function AutopilotModal() {
                   </div>
 
                   <div className="flex flex-wrap gap-2 text-xs text-[var(--fg-subtle)]">
-                    <span className="inline-flex items-center gap-1 rounded-full glass-soft px-2.5 py-1">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-[var(--bg-muted)] px-2.5 py-1">
                       <Brain className="h-3 w-3" /> {progress.phase}
                     </span>
-                    <span className="inline-flex items-center gap-1 rounded-full glass-soft px-2.5 py-1">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-[var(--bg-muted)] px-2.5 py-1">
                       <Compass className="h-3 w-3" /> side quests loading
                     </span>
-                    <span className="inline-flex items-center gap-1 rounded-full glass-soft px-2.5 py-1">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-[var(--bg-muted)] px-2.5 py-1">
                       <Navigation className="h-3 w-3" /> maps live
                     </span>
                   </div>

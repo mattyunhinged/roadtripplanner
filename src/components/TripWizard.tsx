@@ -221,7 +221,7 @@ export function TripWizard() {
     <AnimatePresence>
       {open && (
         <motion.div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-[var(--bg-overlay)] p-3 backdrop-blur-sm sm:items-center no-print"
+          className="fixed inset-0 z-50 flex items-end justify-center bg-[var(--bg-overlay)] p-3 sm:items-center no-print"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -232,14 +232,11 @@ export function TripWizard() {
             animate={{ y: 0, opacity: 1, scale: 1 }}
             exit={{ y: 20, opacity: 0 }}
             onClick={(e) => e.stopPropagation()}
-            className="liquid-composer relative flex max-h-[94vh] w-full max-w-5xl flex-col overflow-hidden rounded-[28px]"
+            className="relative flex max-h-[94vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--bg-elevated)] shadow-[var(--shadow-soft)]"
           >
-            <div className="liquid-orb left-[-8%] top-[-20%] h-40 w-40 bg-[var(--color-amber)]/25" />
-            <div className="liquid-orb bottom-[-25%] right-[-5%] h-48 w-48 bg-[var(--color-sky)]/20" />
-
-            <div className="relative z-10 flex items-start justify-between gap-3 border-b border-[var(--glass-border-inner)] px-5 py-4">
+            <div className="relative z-10 flex items-start justify-between gap-3 border-b border-[var(--border)] px-5 py-4">
               <div>
-                <div className="inline-flex items-center gap-2 rounded-full glass-soft px-3 py-1 text-sm text-[var(--accent)]">
+                <div className="inline-flex items-center gap-2 rounded-full bg-[var(--bg-muted)] px-3 py-1 text-sm text-[var(--accent)]">
                   <Sparkles className="h-4 w-4" /> Trip wizard
                   {running && (
                     <span className="ml-1 inline-flex items-center gap-1 text-[var(--fg-muted)]">
@@ -253,7 +250,7 @@ export function TripWizard() {
                 </div>
                 <h2 className="mt-1 font-display text-2xl md:text-3xl">build your roadtrip</h2>
               </div>
-              <button type="button" disabled={running} onClick={close} className="rounded-full glass-soft p-2">
+              <button type="button" disabled={running} onClick={close} className="rounded-full bg-[var(--bg-muted)] p-2">
                 <X className="h-4 w-4" />
               </button>
             </div>
@@ -269,7 +266,7 @@ export function TripWizard() {
                       'rounded-full px-2.5 py-1 text-[11px]',
                       step === i
                         ? 'bg-[var(--fg)] text-[var(--bg)]'
-                        : 'glass-soft text-[var(--fg-muted)]',
+                        : 'bg-[var(--bg-muted)] text-[var(--fg-muted)]',
                     )}
                   >
                     {i + 1}. {label}
@@ -331,7 +328,7 @@ export function TripWizard() {
                             'rounded-2xl p-4 text-left transition',
                             highways === id
                               ? 'bg-[var(--accent)] text-[var(--accent-fg)]'
-                              : 'glass-soft',
+                              : 'bg-[var(--bg-muted)]',
                           )}
                         >
                           <div className="font-medium">{label}</div>
@@ -373,7 +370,7 @@ export function TripWizard() {
                             'rounded-2xl p-3 text-left text-sm',
                             ageGroup === opt.id
                               ? 'bg-[var(--fg)] text-[var(--bg)]'
-                              : 'glass-soft',
+                              : 'bg-[var(--bg-muted)]',
                           )}
                         >
                           <div className="font-medium">{opt.label}</div>
@@ -397,7 +394,7 @@ export function TripWizard() {
                               'rounded-full px-2.5 py-1 text-xs',
                               active
                                 ? 'bg-[var(--accent)] text-[var(--accent-fg)]'
-                                : 'glass-soft text-[var(--fg-muted)]',
+                                : 'bg-[var(--bg-muted)] text-[var(--fg-muted)]',
                             )}
                           >
                             {tag.label}
@@ -427,7 +424,7 @@ export function TripWizard() {
                           'rounded-3xl p-5 text-left',
                           speed === 'fast'
                             ? 'bg-[var(--accent)] text-[var(--accent-fg)]'
-                            : 'glass-strong',
+                            : 'border border-[var(--border)] bg-[var(--bg-elevated)]',
                         )}
                       >
                         <Zap className="mb-2 h-5 w-5" />
@@ -443,7 +440,7 @@ export function TripWizard() {
                           'rounded-3xl p-5 text-left',
                           speed === 'beautiful'
                             ? 'bg-[var(--accent)] text-[var(--accent-fg)]'
-                            : 'glass-strong',
+                            : 'border border-[var(--border)] bg-[var(--bg-elevated)]',
                         )}
                       >
                         <Camera className="mb-2 h-5 w-5" />
@@ -453,7 +450,7 @@ export function TripWizard() {
                         </p>
                       </button>
                     </div>
-                    <div className="rounded-2xl glass-soft p-3 text-xs text-[var(--fg-muted)]">
+                    <div className="rounded-2xl bg-[var(--bg-muted)] p-3 text-xs text-[var(--fg-muted)]">
                       <div>Start · {startAddress || '—'}</div>
                       <div>Roads · {highways}</div>
                       <div>Age · {ageGroup} · {tags.length} tags</div>
@@ -473,7 +470,7 @@ export function TripWizard() {
                   <div className="space-y-3">
                     {progress && (
                       <>
-                        <div className="overflow-hidden rounded-3xl glass-soft">
+                        <div className="overflow-hidden rounded-2xl bg-[var(--bg-muted)]">
                           <div className="relative h-2 overflow-hidden bg-black/10 dark:bg-white/10">
                             <motion.div
                               className="h-full bg-gradient-to-r from-[var(--accent)] via-[var(--color-sky)] to-[var(--color-sage)]"
@@ -487,7 +484,7 @@ export function TripWizard() {
                         </div>
                         <div
                           ref={logRef}
-                          className="max-h-52 space-y-1 overflow-y-auto rounded-3xl glass-soft p-3"
+                          className="max-h-52 space-y-1 overflow-y-auto rounded-2xl bg-[var(--bg-muted)] p-3"
                         >
                           {progress.log.map((entry) => (
                             <div key={entry.id} className="stream-line flex gap-2 px-2 py-1 text-sm">
@@ -510,17 +507,17 @@ export function TripWizard() {
                     )}
                     {done && trip && (
                       <div className="space-y-3">
-                        <div className="rounded-2xl glass-soft p-4">
+                        <div className="rounded-2xl bg-[var(--bg-muted)] p-4">
                           <div className="font-display text-xl">{trip.title}</div>
                           <p className="mt-1 text-sm text-[var(--fg-muted)]">{trip.vibe}</p>
                           <div className="mt-2 flex flex-wrap gap-2 text-xs">
-                            <span className="rounded-full glass-soft px-2 py-0.5">
+                            <span className="rounded-full bg-[var(--bg-elevated)] px-2 py-0.5">
                               {trip.stops.length} waypoints
                             </span>
-                            <span className="rounded-full glass-soft px-2 py-0.5">
+                            <span className="rounded-full bg-[var(--bg-elevated)] px-2 py-0.5">
                               {trip.stops.filter((s) => s.isSideQuest).length} side quests
                             </span>
-                            <span className="rounded-full glass-soft px-2 py-0.5">
+                            <span className="rounded-full bg-[var(--bg-elevated)] px-2 py-0.5">
                               {Math.round(trip.totalMiles)} mi
                             </span>
                           </div>
@@ -540,7 +537,7 @@ export function TripWizard() {
               </div>
 
               {/* Right: live map */}
-              <div className="relative hidden min-h-[280px] border-l border-[var(--glass-border-inner)] lg:block">
+              <div className="relative hidden min-h-[280px] border-l border-[var(--border)] lg:block">
                 {mapsKey ? (
                   <APIProvider apiKey={mapsKey} libraries={['places']}>
                     <Map
@@ -564,11 +561,11 @@ export function TripWizard() {
                   </div>
                 )}
                 <div className="pointer-events-none absolute left-3 top-3 flex flex-wrap gap-1.5">
-                  <span className="pointer-events-auto inline-flex items-center gap-1 rounded-full glass-strong px-2.5 py-1 text-[11px]">
+                  <span className="pointer-events-auto inline-flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--bg-elevated)] px-2.5 py-1 text-[11px] shadow-sm">
                     <Navigation className="h-3 w-3" /> map + waypoints
                   </span>
                   {done && (
-                    <span className="pointer-events-auto inline-flex items-center gap-1 rounded-full glass-strong px-2.5 py-1 text-[11px] text-[var(--color-sky)]">
+                    <span className="pointer-events-auto inline-flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--bg-elevated)] px-2.5 py-1 text-[11px] text-[var(--color-sky)] shadow-sm">
                       <Compass className="h-3 w-3" /> side quests teal
                     </span>
                   )}

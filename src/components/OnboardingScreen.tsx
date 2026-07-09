@@ -161,8 +161,8 @@ export function OnboardingScreen() {
                 i === step
                   ? 'bg-[var(--fg)] text-[var(--bg)]'
                   : i < step
-                    ? 'glass-soft text-[var(--fg)]'
-                    : 'glass-soft text-[var(--fg-subtle)]',
+                    ? 'bg-[var(--bg-muted)] text-[var(--fg)]'
+                    : 'bg-[var(--bg-muted)] text-[var(--fg-subtle)]',
               )}
             >
               {i + 1}. {label}
@@ -204,7 +204,7 @@ export function OnboardingScreen() {
                 </Button>
               </div>
             </div>
-            <div className="h-[360px] overflow-hidden rounded-3xl border border-[var(--glass-border)] shadow-[var(--shadow-soft)] lg:h-[480px]">
+            <div className="h-[360px] overflow-hidden rounded-3xl border border-[var(--border)] shadow-[var(--shadow-soft)] lg:h-[480px]">
               {mapsKey ? (
                 <APIProvider apiKey={mapsKey} libraries={['places']}>
                   <Map
@@ -250,7 +250,7 @@ export function OnboardingScreen() {
                     'rounded-2xl px-3 py-3 text-left text-sm transition',
                     brandId === b.id
                       ? 'bg-[var(--accent)] text-[var(--accent-fg)]'
-                      : 'glass-soft hover:ring-1 hover:ring-[var(--accent)]/40',
+                      : 'bg-[var(--bg-muted)] hover:ring-1 hover:ring-[var(--accent)]/40',
                   )}
                 >
                   <Car className="mb-1 h-4 w-4 opacity-70" />
@@ -262,7 +262,7 @@ export function OnboardingScreen() {
             {brand && (
               <div className="mt-6">
                 <Label>{brand.name} models</Label>
-                <div className="mt-2 max-h-56 space-y-1.5 overflow-y-auto rounded-2xl glass-soft p-2">
+                <div className="mt-2 max-h-56 space-y-1.5 overflow-y-auto rounded-2xl bg-[var(--bg-muted)] p-2">
                   {models.map((m) => (
                     <button
                       key={m.id}
@@ -289,11 +289,11 @@ export function OnboardingScreen() {
 
             {selectedModel && (
               <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                <div className="rounded-2xl glass-soft p-3 text-sm">
+                <div className="rounded-2xl bg-[var(--bg-muted)] p-3 text-sm">
                   <div className="text-[var(--fg-subtle)]">Fuel</div>
                   <div className="font-medium">{FUEL_LABELS[selectedModel.fuel]}</div>
                 </div>
-                <div className="rounded-2xl glass-soft p-3 text-sm">
+                <div className="rounded-2xl bg-[var(--bg-muted)] p-3 text-sm">
                   <div className="text-[var(--fg-subtle)]">MPG / MPGe</div>
                   <input
                     value={customMpg}
@@ -301,7 +301,7 @@ export function OnboardingScreen() {
                     className="glass-input mt-1 h-9 w-full rounded-lg px-2"
                   />
                 </div>
-                <div className="rounded-2xl glass-soft p-3 text-sm">
+                <div className="rounded-2xl bg-[var(--bg-muted)] p-3 text-sm">
                   <div className="text-[var(--fg-subtle)]">Range</div>
                   <div className="font-medium">
                     {selectedModel.rangeMiles ? `${selectedModel.rangeMiles} mi` : '—'}
@@ -346,7 +346,7 @@ export function OnboardingScreen() {
                     'rounded-3xl p-5 text-left transition',
                     profile.ageGroup === opt.id
                       ? 'bg-[var(--accent)] text-[var(--accent-fg)] shadow-lg'
-                      : 'glass-strong hover:ring-1 hover:ring-[var(--accent)]/40',
+                      : 'border border-[var(--border)] bg-[var(--bg-elevated)] hover:ring-1 hover:ring-[var(--accent)]/40',
                   )}
                 >
                   <div className="font-display text-2xl">{opt.label}</div>
@@ -396,7 +396,7 @@ export function OnboardingScreen() {
                       'rounded-full px-3 py-1.5 text-sm transition',
                       active
                         ? 'bg-[var(--accent)] text-[var(--accent-fg)]'
-                        : 'glass-soft text-[var(--fg-muted)] hover:text-[var(--fg)]',
+                        : 'bg-[var(--bg-muted)] text-[var(--fg-muted)] hover:text-[var(--fg)]',
                     )}
                   >
                     {tag.label}

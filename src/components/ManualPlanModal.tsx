@@ -205,7 +205,7 @@ export function ManualPlanModal() {
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 20, opacity: 0 }}
             onClick={(e) => e.stopPropagation()}
-            className="liquid-composer max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-[28px] p-6"
+            className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-[var(--border)] bg-[var(--bg-elevated)] p-6 shadow-[var(--shadow-soft)]"
           >
             <div className="mb-4 flex items-center justify-between">
               <h2 className="font-display text-2xl">Manual planning</h2>

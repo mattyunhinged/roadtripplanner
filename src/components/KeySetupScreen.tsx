@@ -108,7 +108,7 @@ export function KeySetupScreen() {
           </div>
         </div>
 
-        <div className="liquid-composer w-full max-w-md rounded-[28px] p-6 md:p-8">
+        <div className="w-full max-w-md rounded-2xl border border-[var(--border)] bg-[var(--bg-elevated)] p-6 shadow-[var(--shadow-soft)] md:p-8">
           <div className="relative z-10">
           <div className="mb-6 flex items-center gap-2 text-sm font-medium text-[var(--fg-muted)]">
             <KeyRound className="h-4 w-4" /> First launch setup

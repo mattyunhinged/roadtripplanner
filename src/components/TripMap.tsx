@@ -161,7 +161,7 @@ function PlaceCard({ stop, onClose }: { stop: Stop; onClose: () => void }) {
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: 8 }}
-      className="glass-strong absolute bottom-4 left-4 right-4 z-20 max-w-md overflow-hidden rounded-3xl md:left-6 md:right-auto"
+      className="absolute bottom-4 left-4 right-4 z-20 max-w-md overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--bg-elevated)] shadow-[var(--shadow-soft)] md:left-6 md:right-auto"
     >
       {activePhoto ? (
         <div className="relative h-44 w-full overflow-hidden">
@@ -187,7 +187,7 @@ function PlaceCard({ stop, onClose }: { stop: Stop; onClose: () => void }) {
               href={stop.mapsUrl}
               target="_blank"
               rel="noreferrer"
-              className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full glass-strong px-2.5 py-1 text-xs text-[var(--fg)]"
+              className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-black/50 px-2.5 py-1 text-xs text-white"
             >
               Maps <ExternalLink className="h-3 w-3" />
             </a>
@@ -242,7 +242,7 @@ function PlaceCard({ stop, onClose }: { stop: Stop; onClose: () => void }) {
         </div>
         {stop.hours && <p className="mt-2 line-clamp-2 text-xs text-[var(--fg-subtle)]">{stop.hours}</p>}
         {stop.aiNotes && (
-          <p className="mt-3 rounded-2xl glass-soft px-3 py-2 text-sm text-[var(--fg-muted)]">
+          <p className="mt-3 rounded-xl bg-[var(--bg-muted)] px-3 py-2 text-sm text-[var(--fg-muted)]">
             {stop.aiNotes}
           </p>
         )}
@@ -252,7 +252,7 @@ function PlaceCard({ stop, onClose }: { stop: Stop; onClose: () => void }) {
               href={stop.mapsUrl}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex h-9 items-center gap-2 rounded-xl glass-soft px-3 text-sm"
+              className="inline-flex h-9 items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--bg-muted)] px-3 text-sm"
             >
               <ExternalLink className="h-3.5 w-3.5" /> Google Maps
             </a>

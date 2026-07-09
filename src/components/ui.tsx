@@ -23,7 +23,7 @@ export function Button({
   const variants = {
     primary: 'bg-[var(--fg)] text-[var(--bg)] hover:opacity-90',
     secondary:
-      'bg-[var(--bg-muted)] text-[var(--fg)] border border-[var(--border)] hover:border-[var(--border-strong)]',
+      'bg-[var(--bg-elevated)] text-[var(--fg)] border border-[var(--border)] hover:bg-[var(--bg-muted)]',
     ghost: 'bg-transparent text-[var(--fg-muted)] hover:text-[var(--fg)] hover:bg-[var(--bg-muted)]',
     danger: 'bg-[var(--color-danger)] text-white hover:opacity-90',
     accent: 'bg-[var(--accent)] text-[var(--accent-fg)] hover:opacity-90',
@@ -228,7 +228,7 @@ export function ToastHost() {
           'pointer-events-auto rounded-2xl px-4 py-3 text-sm shadow-lg',
           toast.type === 'error' && 'bg-[var(--color-danger)] text-white',
           toast.type === 'success' && 'bg-[var(--color-success)] text-white',
-          toast.type === 'info' && 'glass-panel text-[var(--fg)]',
+          toast.type === 'info' && 'border border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--fg)]',
         )}
       >
         {toast.message}

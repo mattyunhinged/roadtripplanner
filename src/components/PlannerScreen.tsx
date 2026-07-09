@@ -139,7 +139,6 @@ export function PlannerScreen() {
             <Button
               size="sm"
               variant="accent"
-              className="shadow-lg shadow-[var(--accent)]/25"
               onClick={() => setTripWizardOpen(true)}
             >
               <Sparkles className="h-4 w-4" /> New trip
@@ -175,15 +174,15 @@ export function PlannerScreen() {
           <TripMap onMapClickAdd={onMapClickAdd} />
 
           <div className="no-print absolute left-4 top-24 z-10 flex max-w-md flex-col gap-2 md:left-6">
-            <div className="liquid-composer flex gap-2 rounded-2xl p-2">
+            <div className="flex gap-2 rounded-2xl border border-[var(--border)] bg-[var(--bg-elevated)] p-2 shadow-[var(--shadow-soft)]">
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && addFromSearch()}
                 placeholder="Search places to add…"
-                className="relative z-10 h-10 flex-1 bg-transparent px-2 text-sm outline-none placeholder:text-[var(--fg-subtle)]"
+                className="h-10 flex-1 bg-transparent px-2 text-sm outline-none placeholder:text-[var(--fg-subtle)]"
               />
-              <Button size="sm" variant="secondary" className="relative z-10" onClick={addFromSearch}>
+              <Button size="sm" variant="secondary" onClick={addFromSearch}>
                 <Plus className="h-4 w-4" />
               </Button>
             </div>
@@ -191,7 +190,7 @@ export function PlannerScreen() {
               type="button"
               onClick={() => setAddMode((v) => !v)}
               className={cn(
-                'glass-panel w-fit rounded-full px-3 py-1.5 text-xs',
+                'w-fit rounded-full border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-1.5 text-xs shadow-sm',
                 addMode && 'ring-2 ring-[var(--accent)]',
               )}
             >
@@ -204,7 +203,7 @@ export function PlannerScreen() {
               <Button
                 size="sm"
                 variant="accent"
-                className="justify-start shadow-lg shadow-[var(--accent)]/20"
+                className="justify-start"
                 onClick={() => {
                   saveActiveToLibrary();
                   showToast('Trip saved', 'success');
@@ -215,7 +214,7 @@ export function PlannerScreen() {
               <Button
                 size="sm"
                 variant="secondary"
-                className="glass-panel justify-start"
+                className="justify-start"
                 disabled={posterBusy}
                 onClick={makePoster}
               >
@@ -225,7 +224,7 @@ export function PlannerScreen() {
               <Button
                 size="sm"
                 variant="secondary"
-                className="glass-panel justify-start"
+                className="justify-start"
                 onClick={() => setScreen('export')}
               >
                 <Share2 className="h-4 w-4" /> Export / board
@@ -233,7 +232,7 @@ export function PlannerScreen() {
               <Button
                 size="sm"
                 variant="secondary"
-                className="glass-panel justify-start"
+                className="justify-start"
                 onClick={() => setScreen('packing')}
               >
                 <Backpack className="h-4 w-4" /> Packing
@@ -242,7 +241,7 @@ export function PlannerScreen() {
           )}
         </div>
 
-        <aside className="no-print glass-strong hidden w-[var(--panel-width)] shrink-0 border-l border-[var(--glass-border)] md:block">
+        <aside className="no-print hidden w-[var(--panel-width)] shrink-0 border-l border-[var(--border)] bg-[var(--bg-elevated)] md:block">
           <ItineraryPanel />
         </aside>
       </div>
@@ -252,7 +251,7 @@ export function PlannerScreen() {
         animate={{ height: mobileSheetExpanded ? '70%' : 132 }}
         transition={{ type: 'spring', stiffness: 280, damping: 30 }}
       >
-        <div className="flex h-full flex-col overflow-hidden rounded-t-3xl glass-strong border border-[var(--glass-border)] shadow-2xl">
+        <div className="flex h-full flex-col overflow-hidden rounded-t-3xl border border-[var(--border)] bg-[var(--bg-elevated)] shadow-[var(--shadow-soft)]">
           <button
             type="button"
             className="flex w-full flex-col items-center px-4 pt-3"
@@ -271,7 +270,7 @@ export function PlannerScreen() {
           <div className="min-h-0 flex-1 overflow-hidden">
             {mobileSheetExpanded && <ItineraryPanel />}
           </div>
-          <div className="flex gap-2 border-t border-[var(--glass-border-inner)] p-3">
+          <div className="flex gap-2 border-t border-[var(--border)] p-3">
             <Button size="sm" variant="accent" className="flex-1" onClick={() => setTripWizardOpen(true)}>
               <Sparkles className="h-4 w-4" /> New trip
             </Button>

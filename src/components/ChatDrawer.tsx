@@ -79,9 +79,9 @@ export function ChatDrawer() {
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: 420, opacity: 0 }}
             transition={{ type: 'spring', stiffness: 320, damping: 32 }}
-            className="no-print liquid-composer fixed inset-y-0 right-0 z-40 flex w-full max-w-md flex-col rounded-none border-l border-[var(--glass-border)] md:rounded-l-[28px]"
+            className="no-print fixed inset-y-0 right-0 z-40 flex w-full max-w-md flex-col border-l border-[var(--border)] bg-[var(--bg-elevated)] shadow-[var(--shadow-soft)] md:rounded-l-2xl"
           >
-            <div className="relative z-10 flex items-center justify-between border-b border-[var(--glass-border-inner)] px-4 py-3">
+            <div className="relative z-10 flex items-center justify-between border-b border-[var(--border)] px-4 py-3">
               <div>
                 <div className="font-display text-xl">Trip copilot</div>
                 <div className="text-xs text-[var(--fg-subtle)]">
@@ -91,7 +91,7 @@ export function ChatDrawer() {
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="rounded-full glass-soft p-2"
+                className="rounded-full bg-[var(--bg-muted)] p-2"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -100,7 +100,7 @@ export function ChatDrawer() {
             <div className="relative z-10 flex-1 space-y-3 overflow-y-auto px-4 py-4">
               {messages.length === 0 && (
                 <div className="space-y-2">
-                  <div className="rounded-2xl glass-soft p-4 text-sm text-[var(--fg-muted)]">
+                  <div className="rounded-2xl bg-[var(--bg-muted)] p-4 text-sm text-[var(--fg-muted)]">
                     spitball anything. i&apos;ll edit the trip live.
                   </div>
                   {[
@@ -114,7 +114,7 @@ export function ChatDrawer() {
                       onClick={() => {
                         setInput(chip);
                       }}
-                      className="mr-2 inline-flex rounded-full glass-soft px-3 py-1.5 text-xs text-[var(--fg-muted)] hover:text-[var(--fg)]"
+                      className="mr-2 inline-flex rounded-full bg-[var(--bg-muted)] px-3 py-1.5 text-xs text-[var(--fg-muted)] hover:text-[var(--fg)]"
                     >
                       {chip}
                     </button>
@@ -128,14 +128,14 @@ export function ChatDrawer() {
                     'max-w-[90%] rounded-2xl px-3 py-2 text-sm',
                     m.role === 'user'
                       ? 'ml-auto bg-[var(--fg)] text-[var(--bg)]'
-                      : 'glass-soft text-[var(--fg)]',
+                      : 'bg-[var(--bg-muted)] text-[var(--fg)]',
                   )}
                 >
                   {m.content || (streaming ? '…' : '')}
                 </div>
               ))}
               {streaming && liveStatus && (
-                <div className="inline-flex items-center gap-2 rounded-2xl glass-soft px-3 py-2 text-sm text-[var(--fg-muted)]">
+                <div className="inline-flex items-center gap-2 rounded-2xl bg-[var(--bg-muted)] px-3 py-2 text-sm text-[var(--fg-muted)]">
                   <Spinner className="h-4 w-4" /> {liveStatus}
                 </div>
               )}
@@ -143,7 +143,7 @@ export function ChatDrawer() {
               <div ref={bottomRef} />
             </div>
 
-            <div className="relative z-10 border-t border-[var(--glass-border-inner)] p-3">
+            <div className="relative z-10 border-t border-[var(--border)] p-3">
               <div className="flex gap-2">
                 <input
                   value={input}

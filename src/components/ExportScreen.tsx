@@ -80,7 +80,7 @@ export function ExportScreen() {
         </div>
 
         {!canBoard && (
-          <div className="no-print mb-4 rounded-2xl glass-panel px-4 py-3 text-sm text-[var(--fg-muted)]">
+          <div className="no-print mb-4 rounded-2xl border border-[var(--border)] bg-[var(--bg-elevated)] px-4 py-3 shadow-sm text-sm text-[var(--fg-muted)]">
             <ImageIcon className="mr-2 inline h-4 w-4 text-[var(--accent)]" />
             Trip Board art is available when you use an OpenAI API key (Images API).
           </div>
@@ -91,7 +91,7 @@ export function ExportScreen() {
           </div>
         )}
 
-        <article className="print-area glass-strong overflow-hidden rounded-[28px]">
+        <article className="print-area overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--bg-elevated)]">
           {trip.boardImageUrl && (
             <div className="relative">
               <img
@@ -181,7 +181,7 @@ export function ExportScreen() {
                       {stops.map((stop) => (
                         <li
                           key={stop.id}
-                          className="flex gap-3 overflow-hidden rounded-2xl glass-soft"
+                          className="flex gap-3 overflow-hidden rounded-2xl bg-[var(--bg-muted)]"
                         >
                           {stop.photoUrl ? (
                             <a
