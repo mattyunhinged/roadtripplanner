@@ -10,17 +10,25 @@ export function detectProvider(key: string): AIProviderId | null {
 export function friendlyError(error: unknown, fallback = 'Something went wrong'): string {
   if (typeof error === 'string') return error;
   if (error instanceof Error) {
-    const msg = error.message.toLowerCase();
-    if (msg.includes('quota') || msg.includes('rate')) {
+    const msg = error.message;
+    const lower = msg.toLowerCase();
+    if (lower.includes('quota') || lower.includes('rate')) {
       return 'API quota exceeded. Check your billing or try again later.';
     }
-    if (msg.includes('invalid') && msg.includes('key')) {
+    if (lower.includes('invalid') && lower.includes('key')) {
       return 'That API key looks invalid. Double-check it in Settings.';
     }
-    if (msg.includes('not found') || msg.includes('zero_results')) {
+    if (lower.includes('not found') || lower.includes('zero_results')) {
       return 'No route or places found for that request. Try adjusting the destination.';
     }
-    return error.message || fallback;
+    // Zod dumps are useless in the UI — keep them short.
+    if (msg.trim().startsWith('[') && msg.includes('"code"') && msg.includes('invalid_type')) {
+      return 'Autopilot returned incomplete stop data. Retrying usually fixes it — hit generate again.';
+    }
+    if (msg.length > 280) {
+      return `${msg.slice(0, 240).replace(/\s+/g, ' ')}…`;
+    }
+    return msg || fallback;
   }
   return fallback;
 }

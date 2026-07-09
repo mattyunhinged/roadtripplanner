@@ -16,6 +16,7 @@ import {
   stopBatchSchema,
   tripEditResponseSchema,
   packingListSchema,
+  normalizeStopBatch,
   type DraftTrip,
   type DraftStop,
 } from '@/lib/ai/schemas';
@@ -476,26 +477,40 @@ async function generateDraftTrip(
         kind: 'warn',
         percent: pct,
       });
-      const retry = await provider.complete(apiKey, model, {
-        messages: [
-          { role: 'system', content: AUTOPILOT_SYSTEM },
-          {
-            role: 'user',
-            content: `${autopilotStopBatchPrompt({
-              prompt: userPrompt,
-              profile,
-              outline,
-              dayIndexes,
-              prefs,
-              previousStopTail,
-            })}\n\nIMPORTANT: Previous JSON was invalid. Return ONLY { "stops": [...] } with complete stops for days [${dayIndexes.join(', ')}]. Double-quote all keys/strings.`,
-          },
-        ],
-        jsonMode: true,
-        temperature: 0.15,
-        maxTokens: 10000,
-      });
-      batchStops = stopBatchSchema.parse(extractJSON<unknown>(retry)).stops;
+      // Soft salvage: if the model used title/place instead of name, normalize first.
+      try {
+        const soft = normalizeStopBatch(extractJSON<unknown>(batchContent));
+        if (soft.stops.length) {
+          batchStops = stopBatchSchema.parse(soft).stops;
+        } else {
+          throw new Error('empty soft batch');
+        }
+      } catch {
+        const retry = await provider.complete(apiKey, model, {
+          messages: [
+            { role: 'system', content: AUTOPILOT_SYSTEM },
+            {
+              role: 'user',
+              content: `${autopilotStopBatchPrompt({
+                prompt: userPrompt,
+                profile,
+                outline,
+                dayIndexes,
+                prefs,
+                previousStopTail,
+              })}\n\nCRITICAL FIX: Previous response was missing required "name" fields.
+Return ONLY { "stops": [ ... ] }.
+Every stop object MUST include non-empty string fields:
+"name", "category", "searchQuery", plus numbers "dayIndex" and "order".
+Example stop: {"name":"Golden Gate Bridge","category":"scenic","dayIndex":${dayIndexes[0]},"order":0,"searchQuery":"Golden Gate Bridge San Francisco CA","aiNotes":"iconic","isSideQuest":false}`,
+            },
+          ],
+          jsonMode: true,
+          temperature: 0.1,
+          maxTokens: 10000,
+        });
+        batchStops = stopBatchSchema.parse(extractJSON<unknown>(retry)).stops;
+      }
     }
 
     const filtered = batchStops.filter((s) => dayIndexes.includes(s.dayIndex));

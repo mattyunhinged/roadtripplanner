@@ -222,9 +222,26 @@ ${input.previousStopTail ? `Last stops from prior days (continue logically):\n${
 Rules:
 - If day 0 is included, first stop must be origin (category "origin")
 - Include lodging most nights, meals, attractions/scenic, and ~1 side quest every 2–3 days
+- EVERY stop MUST include both "name" and "searchQuery" as non-empty strings
 - searchQuery = "Name City ST" Google-resolvable
 - Keep aiNotes short
-- Return ONLY: { "stops": [ ... ] }
+- Return ONLY this exact shape:
+{
+  "stops": [
+    {
+      "name": "Place Name",
+      "category": "attraction",
+      "dayIndex": ${input.dayIndexes[0] ?? 0},
+      "order": 0,
+      "searchQuery": "Place Name City ST",
+      "approximateLocation": { "lat": 37.7, "lng": -122.4 },
+      "timeWindow": "10am-12pm",
+      "costEstimate": 20,
+      "aiNotes": "short note",
+      "isSideQuest": false
+    }
+  ]
+}
 - Every stop.dayIndex must be one of [${input.dayIndexes.join(', ')}]
 - order restarts at 0 within each day`;
 }

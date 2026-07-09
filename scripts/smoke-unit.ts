@@ -7,6 +7,11 @@ import {
   recomputeDayTotals,
 } from '../src/lib/ai/tripPatch.ts';
 import { extractJSON } from '../src/lib/ai/provider.ts';
+import {
+  normalizeDraftStop,
+  normalizeStopBatch,
+  stopBatchSchema,
+} from '../src/lib/ai/schemas.ts';
 import { DEFAULT_PROFILE } from '../src/types/index.ts';
 import type { Stop } from '../src/types/index.ts';
 
@@ -128,5 +133,26 @@ const truncated = extractJSON<{ title: string; stops: { name: string }[] }>(
 );
 assert(truncated.title === 'Big Trip', 'salvaged truncated JSON keeps title');
 assert(truncated.stops.length >= 2, 'salvaged truncated JSON keeps complete stops');
+
+const altNamed = normalizeDraftStop({
+  title: 'Pier 39',
+  type: 'attraction',
+  day: 1,
+  query: 'Pier 39 San Francisco CA',
+});
+assert(altNamed.name === 'Pier 39', 'normalizeDraftStop maps title -> name');
+assert(altNamed.searchQuery.includes('Pier 39'), 'normalizeDraftStop maps query -> searchQuery');
+assert(altNamed.category === 'attraction', 'normalizeDraftStop maps type -> category');
+assert(altNamed.dayIndex === 1, 'normalizeDraftStop maps day -> dayIndex');
+
+const batch = stopBatchSchema.parse({
+  stops: [
+    { place: 'Home Base', kind: 'origin', dayIndex: 0, order: 0 },
+    { label: 'Taco Spot', category: 'food', day_index: 0, searchQuery: 'Taco Spot Austin TX' },
+  ],
+});
+assert(batch.stops[0].name === 'Home Base', 'stopBatchSchema accepts place as name');
+assert(batch.stops[1].name === 'Taco Spot', 'stopBatchSchema accepts label as name');
+assert(normalizeStopBatch({ items: [{ name: 'X', searchQuery: 'X' }] }).stops.length === 1, 'items alias');
 
 console.log('All unit checks passed');
