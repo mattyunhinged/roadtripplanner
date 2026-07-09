@@ -20,6 +20,7 @@ export type AgeGroup = 'under21' | 'young_adult' | 'adult' | 'senior';
 export type GuestAgeRange = 'child' | 'teen' | AgeGroup;
 export type HighwayPreference = 'highways' | 'scenic_roads' | 'mix';
 export type GenerationSpeed = 'fast' | 'beautiful';
+export type StopDensity = 'sparse' | 'balanced' | 'packed';
 
 export type ActivityTag =
   | 'networking'
@@ -129,6 +130,14 @@ export interface TravelerProfile {
   onboardingComplete: boolean;
 }
 
+export interface TripMustStop {
+  id: string;
+  name: string;
+  address: string;
+  placeId?: string;
+  location: LatLng;
+}
+
 export interface TripPrefs {
   startAddress: string;
   startLocation: LatLng | null;
@@ -139,6 +148,13 @@ export interface TripPrefs {
   ageGroup: AgeGroup;
   generationSpeed: GenerationSpeed;
   days?: number;
+  /** User-pinned must-visit places — AI routes through these as the spine. */
+  mustStops?: TripMustStop[];
+  /** How many stops to pack into each day. */
+  stopDensity?: StopDensity;
+  /** How dense the return leg should be (round trips). */
+  returnDensity?: StopDensity;
+  roundTrip?: boolean;
 }
 
 export interface Stop {

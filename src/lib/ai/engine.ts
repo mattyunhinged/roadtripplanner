@@ -36,10 +36,13 @@ import {
   searchPlace,
 } from '@/lib/google/maps';
 import type { AutopilotPhase, PackingItem, Stop, TravelerProfile, Trip, TripPrefs } from '@/types';
+import { useChatStore } from '@/stores/chatStore';
 import { useKeysStore } from '@/stores/keysStore';
 import { useProfileStore } from '@/stores/profileStore';
 import { useTripStore } from '@/stores/tripStore';
 import { useUIStore } from '@/stores/uiStore';
+import { saveBoardImage } from '@/lib/boardStore';
+import { saveJSON } from '@/lib/storage';
 import { friendlyError } from '@/lib/utils';
 
 function log(
@@ -208,17 +211,26 @@ async function resolveDraftTrip(draft: DraftTrip, profile: TravelerProfile): Pro
     });
   }
 
+  const isTesla =
+    profile.vehicle?.fuelType === 'electric' &&
+    (profile.vehicle.brandId === 'tesla' ||
+      profile.vehicle.brandName?.toLowerCase() === 'tesla');
+  const isEv =
+    profile.vehicle?.fuelType === 'electric' || profile.vehicle?.fuelType === 'plugin_hybrid';
   progress(
-    profile.vehicle?.fuelType === 'electric' ? 'charge check' : 'fuel check',
-    profile.vehicle?.fuelType === 'electric'
-      ? 'scouting EV-friendly towns on long legs…'
-      : 'dropping fuel stops on the long hauls…',
+    isEv ? 'charge check' : 'fuel check',
+    isTesla
+      ? 'scouting Tesla Superchargers on long legs…'
+      : isEv
+        ? 'scouting EV chargers on long legs…'
+        : 'dropping fuel stops on the long hauls…',
     85,
     'routing',
   );
   const fuelStops: Stop[] = [];
-  const fuelQuery =
-    profile.vehicle?.fuelType === 'electric'
+  const fuelQuery = isTesla
+    ? 'Tesla Supercharger'
+    : profile.vehicle?.fuelType === 'electric'
       ? 'EV charging station'
       : profile.vehicle?.fuelType === 'diesel'
         ? 'diesel gas station'
@@ -231,11 +243,24 @@ async function resolveDraftTrip(draft: DraftTrip, profile: TravelerProfile): Pro
       lat: (from.location.lat + to.location.lat) / 2,
       lng: (from.location.lng + to.location.lng) / 2,
     };
-    const fuel =
-      (await searchPlace(fuelQuery, mid)) || (await findFuelAlongRoute(from.location, to.location));
+    let fuel = await searchPlace(fuelQuery, mid);
+    if (!fuel && isTesla) {
+      // Never fall back to third-party chargers for Tesla — Superchargers only.
+      fuel = await searchPlace('Tesla Supercharging station', mid);
+    } else if (!fuel && !isEv) {
+      fuel = await findFuelAlongRoute(from.location, to.location);
+    } else if (!fuel && isEv && !isTesla) {
+      fuel = await searchPlace('electric vehicle charging station', mid);
+    }
     if (!fuel) continue;
+    if (isTesla && !/tesla|supercharger/i.test(`${fuel.name} ${fuel.address || ''}`)) {
+      // Reject obvious non-Tesla results when we asked for Superchargers.
+      const retry = await searchPlace(`Tesla Supercharger near ${to.name || to.address || ''}`, mid);
+      if (retry) fuel = retry;
+      else if (!/tesla|supercharger/i.test(`${fuel.name}`)) continue;
+    }
     log(
-      `${profile.vehicle?.fuelType === 'electric' ? 'charge' : 'fuel'} · ${fuel.name}`,
+      `${isEv ? 'charge' : 'fuel'} · ${fuel.name}`,
       { phase: 'routing', kind: 'place', percent: 88 },
     );
     fuelStops.push({
@@ -540,6 +565,57 @@ Example stop: {"name":"Golden Gate Bridge","category":"scenic","dayIndex":${dayI
     });
   }
 
+  // Inject user must-stops as destination anchors if the model skipped them
+  if (prefs?.mustStops?.length) {
+    for (const [i, must] of prefs.mustStops.entries()) {
+      const already = normalized.some(
+        (s) =>
+          s.searchQuery.toLowerCase().includes(must.name.toLowerCase()) ||
+          s.name.toLowerCase() === must.name.toLowerCase(),
+      );
+      if (already) continue;
+      const dayIndex = Math.min(
+        outline.totalDays - 1,
+        Math.max(0, Math.round(((i + 1) / (prefs.mustStops.length + 1)) * (outline.totalDays - 1))),
+      );
+      normalized.push({
+        name: must.name,
+        category: 'destination',
+        dayIndex,
+        order: 50 + i,
+        searchQuery: must.address || must.name,
+        approximateLocation: must.location,
+        aiNotes: 'Must-visit you pinned',
+        isSideQuest: false,
+      });
+    }
+    // Re-normalize orders after injection
+    const regroup = new Map<number, DraftStop[]>();
+    for (const stop of normalized) {
+      const list = regroup.get(stop.dayIndex) || [];
+      list.push(stop);
+      regroup.set(stop.dayIndex, list);
+    }
+    normalized.length = 0;
+    for (const [dayIndex, list] of [...regroup.entries()].sort((a, b) => a[0] - b[0])) {
+      list
+        .sort((a, b) => a.order - b.order)
+        .forEach((stop, order) => normalized.push({ ...stop, dayIndex, order }));
+    }
+  }
+
+  if (prefs?.roundTrip != null) {
+    outline.roundTrip = prefs.roundTrip;
+  }
+  if (prefs?.mustStops?.length) {
+    outline.destinationQueries = [
+      ...new Set([
+        ...outline.destinationQueries,
+        ...prefs.mustStops.map((s) => s.address || s.name),
+      ]),
+    ];
+  }
+
   return draftTripSchema.parse({
     title: outline.title,
     vibe: outline.vibe,
@@ -701,32 +777,56 @@ export async function generateTripBoard(trip?: Trip | null): Promise<string> {
     'Ultra high quality, photoreal scenic collage feel.',
   ].join(' ');
 
-  const response = await fetch('/api/ai/images', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      apiKey: keys.aiKey,
-      prompt,
-      size: '1536x1024',
-      quality: 'high',
-    }),
+  async function requestImage(body: Record<string, unknown>) {
+    const response = await fetch('/api/ai/images', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = (await response.json()) as {
+      error?: string;
+      b64?: string;
+      url?: string;
+      model?: string;
+    };
+    return { response, data };
+  }
+
+  // Prefer gpt-image-1; server falls back to dall-e-3. Retry once with a smaller size.
+  let { response, data } = await requestImage({
+    apiKey: keys.aiKey,
+    prompt,
+    size: '1536x1024',
+    quality: 'high',
   });
 
-  const data = (await response.json()) as {
-    error?: string;
-    b64?: string;
-    url?: string;
-    model?: string;
-  };
+  if (!response.ok) {
+    log('Retrying Trip Board with a smaller canvas…', {
+      phase: 'board',
+      kind: 'status',
+      step: 'Trip Board',
+      percent: 40,
+    });
+    ({ response, data } = await requestImage({
+      apiKey: keys.aiKey,
+      prompt,
+      model: 'dall-e-3',
+      size: '1792x1024',
+      quality: 'hd',
+    }));
+  }
 
   if (!response.ok) {
     throw new Error(data.error || 'Trip Board generation failed');
   }
 
+  // Prefer durable data URL when available; remote URLs can expire.
   const imageUrl = data.b64
     ? `data:image/png;base64,${data.b64}`
     : data.url;
   if (!imageUrl) throw new Error('No image returned from OpenAI');
+
+  await saveBoardImage(active.id, imageUrl);
 
   useTripStore.getState().updateActiveTrip((t) => ({
     ...t,
@@ -791,7 +891,39 @@ export async function runTripEdit(
 }
 
 export async function runAskAi(kind: string, context: string, stop?: Stop): Promise<string> {
-  return runTripEdit(`${kind}: ${context}`, stop);
+  const chat = useChatStore.getState();
+  const ui = useUIStore.getState();
+
+  const userText = `${kind}: ${context}`;
+  chat.addMessage({ role: 'user', content: userText });
+  ui.setChatOpen(true);
+  chat.setStreaming(true);
+  const placeholder = chat.addMessage({ role: 'assistant', content: '' });
+  let buffer = '';
+
+  try {
+    const reply = await runTripEdit(userText, stop, (token) => {
+      buffer += token;
+      const preview = buffer.includes('"message"')
+        ? buffer.match(/"message"\s*:\s*"((?:[^"\\]|\\.)*)/)?.[1]?.replace(/\\"/g, '"') ||
+          'Working on your trip…'
+        : 'Thinking through your trip…';
+      useChatStore.getState().updateMessage(placeholder.id, `${preview}…`);
+    });
+    useChatStore.getState().updateMessage(placeholder.id, reply);
+    const msgs = useChatStore.getState().messages.map((m) =>
+      m.id === placeholder.id ? { ...m, content: reply, tripPatchApplied: true } : m,
+    );
+    useChatStore.setState({ messages: msgs });
+    saveJSON('chat', msgs);
+    return reply;
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : 'Ask AI failed';
+    useChatStore.getState().updateMessage(placeholder.id, msg);
+    throw error;
+  } finally {
+    useChatStore.getState().setStreaming(false);
+  }
 }
 
 async function applyEditResponse(

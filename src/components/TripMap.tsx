@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { APIProvider, Map, useMap } from '@vis.gl/react-google-maps';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Replace, Sparkles, Star, Trash2, X, ExternalLink, Compass } from 'lucide-react';
+import { Replace, Sparkles, Star, Trash2, X, ExternalLink, Compass, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button, Spinner } from '@/components/ui';
 import { MAP_STYLES_DARK, MAP_STYLES_LIGHT, decodePolyline } from '@/lib/google/maps';
 import { runAskAi } from '@/lib/ai/engine';
@@ -120,35 +120,62 @@ function FitBounds({ stops }: { stops: Stop[] }) {
   return null;
 }
 
-function MapClickHandler({ onAdd }: { onAdd: (lat: number, lng: number) => void }) {
+function MapClickHandler({
+  onAdd,
+  enabled,
+}: {
+  onAdd: (lat: number, lng: number) => void;
+  enabled: boolean;
+}) {
   const map = useMap();
   useEffect(() => {
     if (!map) return;
+    map.setOptions({
+      draggableCursor: enabled ? 'crosshair' : undefined,
+      draggingCursor: enabled ? 'crosshair' : undefined,
+    });
+    if (!enabled) return;
     const listener = map.addListener('click', (e: google.maps.MapMouseEvent) => {
       if (!e.latLng) return;
+      // Prevent accidental double-fires while geocoding
       onAdd(e.latLng.lat(), e.latLng.lng());
     });
-    return () => listener.remove();
-  }, [map, onAdd]);
+    return () => {
+      listener.remove();
+      map.setOptions({ draggableCursor: undefined, draggingCursor: undefined });
+    };
+  }, [map, onAdd, enabled]);
   return null;
 }
 
 function PlaceCard({ stop, onClose }: { stop: Stop; onClose: () => void }) {
   const removeStop = useTripStore((s) => s.removeStop);
   const showToast = useUIStore((s) => s.showToast);
+  const setChatOpen = useUIStore((s) => s.setChatOpen);
   const [asking, setAsking] = useState(false);
   const [askText, setAskText] = useState('');
   const [photoIndex, setPhotoIndex] = useState(0);
+  const [photoDir, setPhotoDir] = useState(0);
   const photos = stop.photoUrls?.length ? stop.photoUrls : stop.photoUrl ? [stop.photoUrl] : [];
   const activePhoto = photos[photoIndex] || photos[0];
+
+  useEffect(() => {
+    setPhotoIndex(0);
+  }, [stop.id]);
+
+  function shiftPhoto(delta: number) {
+    if (photos.length < 2) return;
+    setPhotoDir(delta);
+    setPhotoIndex((i) => (i + delta + photos.length) % photos.length);
+  }
 
   async function ask() {
     if (!askText.trim()) return;
     setAsking(true);
     try {
-      const msg = await runAskAi('stop', askText.trim(), stop);
-      showToast(msg, 'success');
+      await runAskAi('stop', askText.trim(), stop);
       setAskText('');
+      setChatOpen(true);
     } catch (error) {
       showToast(error instanceof Error ? error.message : 'Ask AI failed', 'error');
     } finally {
@@ -164,30 +191,72 @@ function PlaceCard({ stop, onClose }: { stop: Stop; onClose: () => void }) {
       className="absolute bottom-4 left-4 right-4 z-20 max-w-md overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--bg-elevated)] shadow-[var(--shadow-soft)] md:left-6 md:right-auto"
     >
       {activePhoto ? (
-        <div className="relative h-44 w-full overflow-hidden">
-          <img src={activePhoto} alt={stop.name} className="h-full w-full object-cover" />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/55 to-transparent" />
+        <div className="relative h-48 w-full overflow-hidden">
+          <AnimatePresence mode="wait" custom={photoDir}>
+            <motion.img
+              key={`${stop.id}-${photoIndex}`}
+              src={activePhoto}
+              alt={stop.name}
+              initial={{ opacity: 0, x: photoDir >= 0 ? 40 : -40 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: photoDir >= 0 ? -40 : 40 }}
+              transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+              className="absolute inset-0 h-full w-full object-cover"
+            />
+          </AnimatePresence>
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/55 to-transparent" />
           {photos.length > 1 && (
-            <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-1.5">
-              {photos.map((_, i) => (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={() => setPhotoIndex(i)}
-                  className={cn(
-                    'h-1.5 rounded-full transition',
-                    i === photoIndex ? 'w-4 bg-white' : 'w-1.5 bg-white/50',
-                  )}
-                />
-              ))}
-            </div>
+            <>
+              <motion.button
+                type="button"
+                aria-label="Previous photo"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  shiftPhoto(-1);
+                }}
+                whileHover={{ scale: 1.08 }}
+                whileTap={{ scale: 0.92 }}
+                className="absolute left-2 top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-white shadow-lg backdrop-blur-sm transition hover:bg-black/70"
+              >
+                <ChevronLeft className="h-6 w-6" />
+              </motion.button>
+              <motion.button
+                type="button"
+                aria-label="Next photo"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  shiftPhoto(1);
+                }}
+                whileHover={{ scale: 1.08 }}
+                whileTap={{ scale: 0.92 }}
+                className="absolute right-2 top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-white shadow-lg backdrop-blur-sm transition hover:bg-black/70"
+              >
+                <ChevronRight className="h-6 w-6" />
+              </motion.button>
+              <div className="absolute bottom-2 left-0 right-0 z-10 flex justify-center gap-1.5">
+                {photos.map((_, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => {
+                      setPhotoDir(i > photoIndex ? 1 : -1);
+                      setPhotoIndex(i);
+                    }}
+                    className={cn(
+                      'h-1.5 rounded-full transition-all',
+                      i === photoIndex ? 'w-5 bg-white' : 'w-1.5 bg-white/50',
+                    )}
+                  />
+                ))}
+              </div>
+            </>
           )}
           {stop.mapsUrl && (
             <a
               href={stop.mapsUrl}
               target="_blank"
               rel="noreferrer"
-              className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-black/50 px-2.5 py-1 text-xs text-white"
+              className="absolute right-3 top-3 z-10 inline-flex items-center gap-1 rounded-full bg-black/50 px-2.5 py-1 text-xs text-white"
             >
               Maps <ExternalLink className="h-3 w-3" />
             </a>
@@ -273,12 +342,12 @@ function PlaceCard({ stop, onClose }: { stop: Stop; onClose: () => void }) {
             onClick={async () => {
               setAsking(true);
               try {
-                const msg = await runAskAi(
+                await runAskAi(
                   'replace',
                   `Swap this ${stop.category} for a better alternative nearby`,
                   stop,
                 );
-                showToast(msg, 'success');
+                setChatOpen(true);
               } catch (error) {
                 showToast(error instanceof Error ? error.message : 'Replace failed', 'error');
               } finally {
@@ -293,6 +362,7 @@ function PlaceCard({ stop, onClose }: { stop: Stop; onClose: () => void }) {
           <input
             value={askText}
             onChange={(e) => setAskText(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && ask()}
             placeholder="Ask AI about this stop…"
             className="glass-input h-10 flex-1 rounded-xl px-3 text-sm outline-none"
           />
@@ -305,7 +375,13 @@ function PlaceCard({ stop, onClose }: { stop: Stop; onClose: () => void }) {
   );
 }
 
-export function TripMap({ onMapClickAdd }: { onMapClickAdd?: (lat: number, lng: number) => void }) {
+export function TripMap({
+  onMapClickAdd,
+  pinMode = false,
+}: {
+  onMapClickAdd?: (lat: number, lng: number) => void;
+  pinMode?: boolean;
+}) {
   const mapsKey = useKeysStore((s) => s.keys?.googleMapsKey || '');
   const theme = useKeysStore((s) => s.settings.theme);
   const trip = useTripStore((s) => s.activeTrip);
@@ -317,6 +393,7 @@ export function TripMap({ onMapClickAdd }: { onMapClickAdd?: (lat: number, lng: 
     const stops = trip?.stops || [];
     return stops
       .filter((s) => dayFilter === 'all' || s.dayIndex === dayFilter)
+      .slice()
       .sort((a, b) => a.dayIndex - b.dayIndex || a.order - b.order);
   }, [trip, dayFilter]);
 
@@ -340,17 +417,23 @@ export function TripMap({ onMapClickAdd }: { onMapClickAdd?: (lat: number, lng: 
           disableDefaultUI
           styles={theme === 'dark' ? MAP_STYLES_DARK : MAP_STYLES_LIGHT}
           className="h-full w-full"
+          clickableIcons={false}
         >
           <FitBounds stops={visibleStops} />
           <RouteLayer />
           <MarkersLayer stops={visibleStops} />
-          {onMapClickAdd && <MapClickHandler onAdd={onMapClickAdd} />}
+          {onMapClickAdd && <MapClickHandler onAdd={onMapClickAdd} enabled={!!pinMode} />}
         </Map>
       </APIProvider>
 
       <AnimatePresence>
         {selected && <PlaceCard stop={selected} onClose={() => setSelectedStopId(null)} />}
       </AnimatePresence>
+      {pinMode && (
+        <div className="pointer-events-none absolute left-1/2 top-4 z-10 -translate-x-1/2 rounded-full border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-1.5 text-xs shadow-sm">
+          Tap the map to drop a pin
+        </div>
+      )}
     </div>
   );
 }

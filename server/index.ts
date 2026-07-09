@@ -111,54 +111,80 @@ app.post('/api/ai/images', async (req, res) => {
         n: 1,
         size: size || '1536x1024',
         quality: quality || 'high',
+        // gpt-image-1 returns b64 by default; be explicit for older SDKs
       }),
     });
 
-    const data = (await response.json()) as {
+    let data = (await response.json()) as {
       error?: { message?: string };
       data?: { b64_json?: string; url?: string; revised_prompt?: string }[];
     };
 
     if (!response.ok) {
-      // Fallback to dall-e-3 if gpt-image-1 unavailable
-      if (response.status === 404 || data.error?.message?.toLowerCase().includes('model')) {
-        const fallback = await fetch('https://api.openai.com/v1/images/generations', {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: 'dall-e-3',
-            prompt: prompt.slice(0, 3900),
-            n: 1,
-            size: '1792x1024',
-            quality: 'hd',
-            response_format: 'b64_json',
-          }),
-        });
-        const fallbackData = (await fallback.json()) as {
-          error?: { message?: string };
-          data?: { b64_json?: string; url?: string }[];
-        };
-        if (!fallback.ok) {
-          return res.status(fallback.status).json({
-            error: fallbackData.error?.message || 'Image generation failed',
-          });
-        }
-        const img = fallbackData.data?.[0];
-        return res.json({
-          b64: img?.b64_json,
-          url: img?.url,
+      // Always try dall-e-3 on any gpt-image failure (billing, model access, size, etc.)
+      const fallback = await fetch('https://api.openai.com/v1/images/generations', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
           model: 'dall-e-3',
+          prompt: prompt.slice(0, 3900),
+          n: 1,
+          size: '1792x1024',
+          quality: 'hd',
+          response_format: 'b64_json',
+        }),
+      });
+      const fallbackData = (await fallback.json()) as {
+        error?: { message?: string };
+        data?: { b64_json?: string; url?: string }[];
+      };
+      if (!fallback.ok) {
+        return res.status(fallback.status).json({
+          error: fallbackData.error?.message || data.error?.message || 'Image generation failed',
         });
       }
-      return res.status(response.status).json({
-        error: data.error?.message || 'Image generation failed',
+      const img = fallbackData.data?.[0];
+      return res.json({
+        b64: img?.b64_json,
+        url: img?.url,
+        model: 'dall-e-3',
       });
     }
 
     const img = data.data?.[0];
+    // Some models return url, some b64_json — accept either
+    if (!img?.b64_json && !img?.url) {
+      // Retry once with dall-e-3 if empty payload
+      const fallback = await fetch('https://api.openai.com/v1/images/generations', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'dall-e-3',
+          prompt: prompt.slice(0, 3900),
+          n: 1,
+          size: '1792x1024',
+          quality: 'standard',
+          response_format: 'b64_json',
+        }),
+      });
+      const fallbackData = (await fallback.json()) as {
+        error?: { message?: string };
+        data?: { b64_json?: string; url?: string }[];
+      };
+      if (!fallback.ok) {
+        return res.status(fallback.status).json({
+          error: fallbackData.error?.message || 'Image generation returned empty payload',
+        });
+      }
+      const fb = fallbackData.data?.[0];
+      return res.json({ b64: fb?.b64_json, url: fb?.url, model: 'dall-e-3' });
+    }
     return res.json({
       b64: img?.b64_json,
       url: img?.url,

@@ -372,12 +372,13 @@ export async function buildDriveLegs(
 export async function findFuelAlongRoute(
   from: LatLng,
   to: LatLng,
+  query = 'gas station',
 ): Promise<ResolvedPlace | null> {
   const mid: LatLng = {
     lat: (from.lat + to.lat) / 2,
     lng: (from.lng + to.lng) / 2,
   };
-  return searchPlace('gas station', mid);
+  return searchPlace(query, mid);
 }
 
 export function decodePolyline(encoded: string): LatLng[] {

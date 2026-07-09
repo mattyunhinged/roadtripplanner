@@ -219,6 +219,7 @@ export function ItineraryPanel() {
   const setDayFilter = useUIStore((s) => s.setDayFilter);
   const setAutopilotOpen = useUIStore((s) => s.setAutopilotOpen);
   const setTripWizardOpen = useUIStore((s) => s.setTripWizardOpen);
+  const setChatOpen = useUIStore((s) => s.setChatOpen);
   const showToast = useUIStore((s) => s.showToast);
   const [busy, setBusy] = useState(false);
 
@@ -427,11 +428,11 @@ export function ItineraryPanel() {
                               leg={leg}
                               onAsk={async () => {
                                 try {
-                                  const msg = await runAskAi(
+                                  await runAskAi(
                                     'leg',
                                     `Add a fun scenic or food side quest between ${stop.name} and ${next.name}. Keep it chill.`,
                                   );
-                                  showToast(msg, 'success');
+                                  setChatOpen(true);
                                 } catch (error) {
                                   showToast(
                                     error instanceof Error ? error.message : 'Ask AI failed',

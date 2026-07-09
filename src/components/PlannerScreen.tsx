@@ -54,13 +54,26 @@ export function PlannerScreen() {
   const onMapClickAdd = useCallback(
     async (lat: number, lng: number) => {
       if (!addMode) return;
+      const active = useTripStore.getState().activeTrip;
+      if (!active) {
+        showToast('Create or open a trip before dropping pins', 'info');
+        setAddMode(false);
+        return;
+      }
+      // Leave pin mode immediately so double-clicks don't stack
+      setAddMode(false);
       try {
-        const place = await reverseGeocode({ lat, lng });
-        const dayIndex = trip?.days[trip.days.length - 1]?.index ?? 0;
-        const order = trip?.stops.filter((s) => s.dayIndex === dayIndex).length ?? 0;
+        let place = await reverseGeocode({ lat, lng });
+        // Enrich with Places details/photos when possible
+        if (place?.name) {
+          const richer = await searchPlace(place.name, { lat, lng });
+          if (richer) place = { ...place, ...richer, location: { lat, lng } };
+        }
+        const dayIndex = active.days[active.days.length - 1]?.index ?? 0;
+        const order = active.stops.filter((s) => s.dayIndex === dayIndex).length ?? 0;
         const stop: Stop = {
           id: uuid(),
-          name: place?.name || 'Custom stop',
+          name: place?.name || `Pinned stop (${lat.toFixed(3)}, ${lng.toFixed(3)})`,
           category: 'custom',
           location: { lat, lng },
           placeId: place?.placeId,
@@ -69,18 +82,20 @@ export function PlannerScreen() {
           order,
           photoUrl: place?.photoUrl,
           photoUrls: place?.photoUrls,
-          mapsUrl: place?.mapsUrl,
-          aiNotes: 'Added from map click',
+          mapsUrl: place?.mapsUrl || `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`,
+          aiNotes: 'Added from map pin',
         };
         addStop(stop);
-        await recalculateRoutes();
-        showToast('Stop added', 'success');
-        setAddMode(false);
+        useUIStore.getState().setSelectedStopId(stop.id);
+        if (active.stops.length + 1 >= 2) {
+          await recalculateRoutes();
+        }
+        showToast(`Pinned ${stop.name}`, 'success');
       } catch (error) {
         showToast(error instanceof Error ? error.message : 'Could not add stop', 'error');
       }
     },
-    [addMode, addStop, showToast, trip],
+    [addMode, addStop, showToast],
   );
 
   async function addFromSearch() {
@@ -184,7 +199,7 @@ export function PlannerScreen() {
 
       <div className="flex min-h-0 flex-1">
         <div className="relative min-h-0 min-w-0 flex-1">
-          <TripMap onMapClickAdd={onMapClickAdd} />
+          <TripMap onMapClickAdd={onMapClickAdd} pinMode={addMode} />
 
           <div className="no-print absolute left-4 top-24 z-10 flex max-w-md flex-col gap-2 md:left-6">
             <div className="flex gap-2 rounded-2xl border border-[var(--border)] bg-[var(--bg-elevated)] p-2 shadow-[var(--shadow-soft)]">
@@ -201,9 +216,10 @@ export function PlannerScreen() {
             </div>
             <button
               type="button"
+              disabled={!trip}
               onClick={() => setAddMode((v) => !v)}
               className={cn(
-                'w-fit rounded-full border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-1.5 text-xs shadow-sm',
+                'w-fit rounded-full border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-1.5 text-xs shadow-sm disabled:opacity-40',
                 addMode && 'ring-2 ring-[var(--accent)]',
               )}
             >

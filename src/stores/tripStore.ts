@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { Trip, Stop, DriveLeg } from '@/types';
+import { hydrateBoardImage, tripForLocalStorage } from '@/lib/boardStore';
 import { loadJSON, saveJSON } from '@/lib/storage';
 import { applyBudget, createEmptyTrip, recomputeDayTotals, reorderStops } from '@/lib/ai/tripPatch';
 import { useProfileStore } from './profileStore';
@@ -25,12 +26,15 @@ interface TripState {
 }
 
 function persistActive(trip: Trip | null) {
-  if (trip) saveJSON(ACTIVE_STORAGE, trip);
+  if (trip) saveJSON(ACTIVE_STORAGE, tripForLocalStorage(trip));
   else saveJSON(ACTIVE_STORAGE, null);
 }
 
 function persistLibrary(library: Trip[]) {
-  saveJSON(LIBRARY_STORAGE, library);
+  saveJSON(
+    LIBRARY_STORAGE,
+    library.map((t) => tripForLocalStorage(t)),
+  );
 }
 
 export const useTripStore = create<TripState>((set, get) => ({
@@ -41,6 +45,16 @@ export const useTripStore = create<TripState>((set, get) => ({
     const library = loadJSON<Trip[]>(LIBRARY_STORAGE, []);
     const activeTrip = loadJSON<Trip | null>(ACTIVE_STORAGE, null);
     set({ library, activeTrip });
+    void (async () => {
+      const hydratedActive = await hydrateBoardImage(activeTrip);
+      const hydratedLibrary = await Promise.all(
+        library.map(async (t) => (await hydrateBoardImage(t)) || t),
+      );
+      set({
+        activeTrip: hydratedActive,
+        library: hydratedLibrary,
+      });
+    })();
   },
 
   setActiveTrip: (trip) => {

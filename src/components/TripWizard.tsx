@@ -221,7 +221,7 @@ export function TripWizard() {
   const [speed, setSpeed] = useState<GenerationSpeed>('beautiful');
   const [stopDensity, setStopDensity] = useState<StopDensity>('balanced');
   const [returnDensity, setReturnDensity] = useState<StopDensity>('balanced');
-  const [roundTrip, setRoundTrip] = useState(false);
+  const [roundTrip, setRoundTrip] = useState(true);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState('');
   const [done, setDone] = useState(false);
@@ -246,7 +246,7 @@ export function TripWizard() {
     setSpeed('beautiful');
     setStopDensity('balanced');
     setReturnDensity('balanced');
-    setRoundTrip(false);
+    setRoundTrip(true);
   }, [open]);
 
   useEffect(() => {
@@ -477,16 +477,16 @@ export function TripWizard() {
                     </div>
 
                     <div>
-                      <Label>Trip notes for Autopilot</Label>
-                      <p className="mb-1.5 text-sm text-[var(--fg-muted)]">
-                        Tell Autopilot the vibe, constraints, people, or anything special — e.g. &apos;3
-                        weeks west coast, music festivals, keep days under 5h driving&apos;.
+                      <Label>What should Autopilot know?</Label>
+                      <p className="mb-1.5 text-sm leading-relaxed text-[var(--fg-muted)]">
+                        Free-form trip brief — length, vibe, must-dos, pace, budget quirks, people
+                        traveling with you. Autopilot uses this plus your must-visits above.
                       </p>
                       <TextArea
                         value={prompt}
                         onChange={(e) => setPrompt(e.target.value)}
-                        placeholder="e.g. 3 weeks west coast, music festivals, keep days under 5h driving"
-                        className="min-h-[72px]"
+                        placeholder="e.g. 3 weeks west coast, music festivals, keep days under 5h driving, surprise us with roadside diners"
+                        className="min-h-[96px] text-[15px] leading-relaxed"
                       />
                     </div>
                     <div className="flex justify-end">

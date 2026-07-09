@@ -164,6 +164,17 @@ Effective MPG/MPGe: ${input.mpg ?? input.profile.vehicle?.mpg ?? 28}
 
 PHASE 1 — OUTLINE ONLY (no stops yet).
 Infer totalDays from the user ask. Support massive trips (even 2–8+ weeks) when they ask for it.
+${
+  prefs?.mustStops?.length
+    ? `MUST-VISIT spine (route MUST pass these in a sensible order — they are locked anchors):\n${prefs.mustStops
+        .map((s, i) => `${i + 1}. ${s.name} — ${s.address}`)
+        .join('\n')}\nPut them into destinationQueries and day summaries.`
+    : ''
+}
+${prefs?.roundTrip === false ? 'One-way trip (do NOT force a return home).' : 'Round trip preferred unless the user said otherwise.'}
+Stop density outbound: ${prefs?.stopDensity || 'balanced'} (sparse=fewer stops/day, packed=more).
+Return-leg density: ${prefs?.returnDensity || prefs?.stopDensity || 'balanced'}.
+
 Return ONLY:
 {
   "title": "short title",
@@ -198,18 +209,32 @@ export function autopilotStopBatchPrompt(input: {
 }): string {
   const prefs = input.prefs;
   const speed: GenerationSpeed = prefs?.generationSpeed || 'beautiful';
-  const stopsPerDay = speed === 'fast' ? '3-4' : '4-6';
+  const density = prefs?.stopDensity || 'balanced';
+  const returnDensity = prefs?.returnDensity || density;
+  const densityGuide =
+    density === 'sparse' ? '2-3' : density === 'packed' ? '5-7' : speed === 'fast' ? '3-4' : '4-6';
+  const returnGuide =
+    returnDensity === 'sparse' ? '2-3' : returnDensity === 'packed' ? '5-7' : densityGuide;
   const dayMeta = input.outline.days
     .filter((d) => input.dayIndexes.includes(d.index))
     .map((d) => `D${d.index}: ${d.title}${d.summary ? ` — ${d.summary}` : ''}`)
     .join('\n');
+  const mid = Math.floor(input.outline.totalDays / 2);
+  const isReturnBatch = input.dayIndexes.some((d) => d >= mid) && input.outline.roundTrip;
 
   return `Continue Autopilot for trip "${input.outline.title}" (${input.outline.totalDays} days).
 User ask: ${input.prompt}
 Origin: ${input.outline.originQuery}
 Destinations: ${input.outline.destinationQueries.join(' | ') || 'n/a'}
 Round trip: ${input.outline.roundTrip}
-Mode: ${speed} (~${stopsPerDay} stops/day including lodging/food as needed)
+Mode: ${speed} · density ${isReturnBatch ? `return/${returnDensity} (~${returnGuide} stops/day)` : `outbound/${density} (~${densityGuide} stops/day)`}
+${
+  prefs?.mustStops?.length
+    ? `MUST include these anchors if they fall on these days (use exact names/addresses):\n${prefs.mustStops
+        .map((s) => `- ${s.name} @ ${s.address}`)
+        .join('\n')}`
+    : ''
+}
 
 Traveler:
 ${profilePrompt(input.profile)}
