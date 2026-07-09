@@ -4,12 +4,15 @@ import { MessageCircle, Send, X } from 'lucide-react';
 import { Button, Spinner } from '@/components/ui';
 import { runTripEdit } from '@/lib/ai/engine';
 import { useChatStore } from '@/stores/chatStore';
+import { useProfileStore } from '@/stores/profileStore';
 import { useUIStore } from '@/stores/uiStore';
 import { cn } from '@/lib/utils';
 
 export function ChatDrawer() {
   const open = useUIStore((s) => s.chatOpen);
   const setOpen = useUIStore((s) => s.setChatOpen);
+  const displayName = useProfileStore((s) => s.profile.displayName);
+  const firstName = displayName.trim().split(/\s+/)[0] || '';
   const messages = useChatStore((s) => s.messages);
   const addMessage = useChatStore((s) => s.addMessage);
   const updateMessage = useChatStore((s) => s.updateMessage);
@@ -83,7 +86,9 @@ export function ChatDrawer() {
           >
             <div className="relative z-10 flex items-center justify-between border-b border-[var(--border)] px-4 py-3">
               <div>
-                <div className="font-display text-xl">Trip copilot</div>
+                <div className="font-display text-xl">
+                  {firstName ? `${firstName}'s copilot` : 'Trip copilot'}
+                </div>
                 <div className="text-xs text-[var(--fg-subtle)]">
                   Live edits · map updates instantly
                 </div>
@@ -101,7 +106,9 @@ export function ChatDrawer() {
               {messages.length === 0 && (
                 <div className="space-y-2">
                   <div className="rounded-2xl bg-[var(--bg-muted)] p-4 text-sm text-[var(--fg-muted)]">
-                    spitball anything. i&apos;ll edit the trip live.
+                    {firstName
+                      ? `spitball anything, ${firstName}. i'll edit the trip live.`
+                      : "spitball anything. i'll edit the trip live."}
                   </div>
                   {[
                     'make day 2 more chill',

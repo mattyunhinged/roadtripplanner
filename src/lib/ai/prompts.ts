@@ -8,22 +8,36 @@ import type {
   HighwayPreference,
   GenerationSpeed,
 } from '../../types';
-import { AGE_GROUP_OPTIONS, ACTIVITY_TAG_OPTIONS } from '../../types';
+import { AGE_GROUP_OPTIONS, ACTIVITY_TAG_OPTIONS, GUEST_AGE_OPTIONS } from '../../types';
 
 export function profilePrompt(profile: TravelerProfile): string {
   const home = profile.home?.address || 'unknown';
   const tags = (profile.activityTags?.length ? profile.activityTags : profile.interests) || [];
   const age = AGE_GROUP_OPTIONS.find((a) => a.id === profile.ageGroup);
   const v = profile.vehicle;
+  const name = profile.displayName?.trim();
+  const guests = profile.guests || [];
+  const guestLines =
+    guests.length > 0
+      ? guests
+          .map((g) => {
+            const opt = GUEST_AGE_OPTIONS.find((o) => o.id === g.ageRange);
+            return `  - ${g.name} (${opt?.label || g.ageRange})`;
+          })
+          .join('\n')
+      : '  - solo / no guests listed';
   return [
+    name ? `Traveler first name: ${name} — address them by name in titles/vibes/notes when it feels natural` : 'Traveler name: unknown',
     `Home base: ${home}`,
-    `Age group: ${age?.label || profile.ageGroup} (${age?.blurb || ''})`,
+    `Age group (lead): ${age?.label || profile.ageGroup} (${age?.blurb || ''})`,
+    `Crew size: ${1 + guests.length} (lead + ${guests.length} guest${guests.length === 1 ? '' : 's'})`,
+    `Guests:\n${guestLines}`,
     `Vibe preference: ${profile.travelStyle}`,
     `Activity tags: ${tags.join(', ') || 'open to anything'}`,
     `Budget energy: ${profile.budgetLevel}`,
     `Sleep situation: ${profile.lodgingPreference}`,
     `Max drive grind / day: ${profile.maxDriveHoursPerDay}h`,
-    `Crew: ${profile.partyType}`,
+    `Crew type: ${profile.partyType}`,
     `Highways default: ${profile.highwayPreference}`,
     v
       ? `Vehicle: ${v.brandName} ${v.modelName} · ${v.fuelType} · ${v.mpg ?? '?'} mpg/MPGe · range ${v.rangeMiles ?? 'n/a'} mi · ${v.drivetrain || 'n/a'}`
@@ -70,10 +84,29 @@ function ageActivityGuidance(age: AgeGroup): string {
   }
 }
 
+function crewAgeGuidance(profile: TravelerProfile): string {
+  const guests = profile.guests || [];
+  const ranges = new Set<string>([profile.ageGroup, ...guests.map((g) => g.ageRange)]);
+  const lines: string[] = [];
+  if (ranges.has('child')) {
+    lines.push('Kids under 12 aboard — prioritize family-friendly, short walks, playgrounds, ice cream, avoid late nightlife.');
+  }
+  if (ranges.has('teen') || ranges.has('under21')) {
+    lines.push('Teens / under-21 in the car — NO alcohol-focused stops for the group plan; keep all-ages options in the mix.');
+  }
+  if (guests.length) {
+    lines.push(
+      `Name-drop the crew when it fits (e.g. "${profile.displayName || 'lead'} + ${guests[0].name}"). Plan for ${1 + guests.length} people.`,
+    );
+  }
+  return lines.join('\n');
+}
+
 export const AUTOPILOT_SYSTEM = `You are Autopilot for "On The Road" by Ryzord — Grok-coded chaotic-good roadtrip bestie.
 Witty, short, Gen Z energy. Never corporate. Build REAL US roadtrips Google Places can find.
 
 Personality:
+- If traveler has a first name, use it naturally in title/vibe/progressHints (not every line — just a creative touch)
 - title + vibe slap (memorable, not bland)
 - aiNotes = 1 short line max
 - day titles punchy ("Fog & Clams Arc")
@@ -82,8 +115,9 @@ Personality:
 Craft rules:
 - ALWAYS start with origin as first stop day 0
 - Respect highway preference: highways = prefer interstates/fast; scenic_roads = avoid interstates when reasonable; mix = balanced
-- Respect age group hard rules for side activities
+- Respect age group hard rules for side activities — and the YOUNGEST guest wins for alcohol/nightlife restrictions
 - Match activity tags for side quests + main stops
+- Plan food/lodging scale for the full crew size
 - Include lodging most nights, meals, scenic + attractions
 - ALWAYS 2–5 SIDE QUESTS (isSideQuest: true)
 - For EVs: prefer stops near charging-friendly towns; note charge-friendly picks in aiNotes occasionally
@@ -123,8 +157,9 @@ export function autopilotUserPrompt(input: {
 STARTING POINT (must be origin stop day 0): ${start}
 Highway preference: ${highway}
 Generation mode: ${speed}
-Age group: ${age}
+Lead age group: ${age}
 ${ageActivityGuidance(age)}
+${crewAgeGuidance(input.profile)}
 Activity tags to honor: ${tagLabels || 'surprise me with tasteful picks'}
 
 Traveler profile:
@@ -162,6 +197,7 @@ originQuery MUST match the starting point. Side quests = isSideQuest true.`;
 }
 
 export const COPILOT_SYSTEM = `You are the trip copilot for "On The Road" by Ryzord — Grok-coded bestie, funny, useful.
+If the traveler has a first name, use it occasionally in your message (warm, not cringe).
 Return ONLY JSON. message = short chatty reply (1–3 sentences).
 
 {
@@ -177,7 +213,7 @@ Return ONLY JSON. message = short chatty reply (1–3 sentences).
   "fullTrip": optional full draft when action is replace
 }
 
-Prefer patch. Suggest side quests for "more fun" / detours. Keep message short.`;
+Prefer patch. Suggest side quests for "more fun" / detours. Keep message short. Respect guest ages (kids/teens = no bar crawls).`;
 
 export function askAiPrompt(kind: string, context: string, trip: Trip | null, stop?: Stop): string {
   return `Request type: ${kind}

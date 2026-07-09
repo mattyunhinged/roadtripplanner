@@ -1,9 +1,25 @@
 import { create } from 'zustand';
-import type { TravelerProfile, ActivityTag } from '@/types';
+import type { TravelerProfile, ActivityTag, TripGuest } from '@/types';
 import { DEFAULT_PROFILE } from '@/types';
 import { loadJSON, saveJSON } from '@/lib/storage';
 
 const PROFILE_STORAGE = 'profile';
+
+function migrateGuests(raw: unknown): TripGuest[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((g) => {
+      if (!g || typeof g !== 'object') return null;
+      const guest = g as Partial<TripGuest>;
+      if (!guest.name || !guest.ageRange) return null;
+      return {
+        id: typeof guest.id === 'string' && guest.id ? guest.id : crypto.randomUUID(),
+        name: String(guest.name).trim(),
+        ageRange: guest.ageRange,
+      } as TripGuest;
+    })
+    .filter((g): g is TripGuest => !!g && !!g.name);
+}
 
 function migrateProfile(raw: Partial<TravelerProfile> | null): TravelerProfile {
   const base = { ...DEFAULT_PROFILE, ...(raw || {}) };
@@ -15,6 +31,8 @@ function migrateProfile(raw: Partial<TravelerProfile> | null): TravelerProfile {
   return {
     ...DEFAULT_PROFILE,
     ...base,
+    displayName: typeof base.displayName === 'string' ? base.displayName.trim() : '',
+    guests: migrateGuests(base.guests),
     activityTags: tags,
     interests: tags,
     ageGroup: base.ageGroup || 'young_adult',

@@ -316,7 +316,7 @@ async function resolveDraftTrip(draft: DraftTrip, profile: TravelerProfile): Pro
     },
     destinations,
     roundTrip: draft.roundTrip,
-    travelers: profile.partyType === 'solo' ? 1 : profile.partyType === 'family' ? 4 : 2,
+    travelers: Math.max(1, 1 + (profile.guests?.length || 0)),
     days,
     stops: allStops,
     legs,
@@ -360,8 +360,15 @@ export async function runAutopilot(
       step: 'warming up',
       percent: 4,
     });
+    if (profile.displayName) {
+      log(`hey ${profile.displayName} — cooking your route…`, {
+        phase: 'thinking',
+        kind: 'thought',
+        percent: 5,
+      });
+    }
     log(
-      `${profile.travelStyle} · ${profile.budgetLevel} · max ${profile.maxDriveHoursPerDay}h/day · ${profile.partyType}`,
+      `${profile.travelStyle} · ${profile.budgetLevel} · max ${profile.maxDriveHoursPerDay}h/day · crew ${1 + (profile.guests?.length || 0)}`,
       { phase: 'thinking', kind: 'thought', percent: 6 },
     );
     if (profile.vehicle) {

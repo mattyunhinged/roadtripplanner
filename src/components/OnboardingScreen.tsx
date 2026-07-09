@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { APIProvider, Map, useMap } from '@vis.gl/react-google-maps';
-import { ArrowLeft, ArrowRight, Car, SkipForward } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Car, Plus, SkipForward, Trash2, Users } from 'lucide-react';
 import { BrandLockup, Button, Label, Segmented } from '@/components/ui';
 import { useKeysStore } from '@/stores/keysStore';
 import { useProfileStore } from '@/stores/profileStore';
@@ -8,14 +8,16 @@ import { useUIStore } from '@/stores/uiStore';
 import {
   AGE_GROUP_OPTIONS,
   ACTIVITY_TAG_OPTIONS,
-  type ActivityTag,
+  GUEST_AGE_OPTIONS,
   type AgeGroup,
   type BudgetLevel,
+  type GuestAgeRange,
   type HighwayPreference,
   type LatLng,
   type LodgingPreference,
   type PartyType,
   type TravelStyle,
+  type TripGuest,
   type VehicleProfile,
 } from '@/types';
 import { cn } from '@/lib/utils';
@@ -45,7 +47,7 @@ function HomeMarker({ position, visible }: { position: LatLng; visible: boolean 
   return null;
 }
 
-const STEPS = ['Home', 'Ride', 'Age', 'Tags', 'Prefs'] as const;
+const STEPS = ['Name', 'Home', 'Ride', 'Age', 'Crew', 'Tags', 'Prefs'] as const;
 
 export function OnboardingScreen() {
   const mapsKey = useKeysStore((s) => s.keys?.googleMapsKey || '');
@@ -63,6 +65,13 @@ export function OnboardingScreen() {
   const [brandId, setBrandId] = useState(profile.vehicle?.brandId || 'tesla');
   const [modelId, setModelId] = useState(profile.vehicle?.modelId || '');
   const [customMpg, setCustomMpg] = useState(String(profile.vehicle?.mpg ?? ''));
+  const [displayName, setDisplayName] = useState(profile.displayName || '');
+  const [guests, setGuests] = useState<TripGuest[]>(
+    profile.guests?.length ? profile.guests.map((g) => ({ ...g })) : [],
+  );
+  const [guestDraftName, setGuestDraftName] = useState('');
+  const [guestDraftAge, setGuestDraftAge] = useState<GuestAgeRange>('young_adult');
+  const nameInputRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const brand = findBrand(brandId);
@@ -70,7 +79,7 @@ export function OnboardingScreen() {
   const selectedModel = modelId ? findModel(brandId, modelId) : undefined;
 
   useEffect(() => {
-    if (!mapsKey || !inputRef.current || !window.google?.maps?.places || step !== 0) return;
+    if (!mapsKey || !inputRef.current || !window.google?.maps?.places || step !== 1) return;
     const autocomplete = new google.maps.places.Autocomplete(inputRef.current, {
       fields: ['formatted_address', 'geometry', 'place_id', 'name'],
       types: ['geocode'],
@@ -119,12 +128,56 @@ export function OnboardingScreen() {
     return vehicle;
   }
 
+  function firstName() {
+    return displayName.trim().split(/\s+/)[0] || '';
+  }
+
+  function addGuest() {
+    const name = guestDraftName.trim();
+    if (!name) return;
+    const next: TripGuest = {
+      id: crypto.randomUUID(),
+      name,
+      ageRange: guestDraftAge,
+    };
+    const updated = [...guests, next];
+    setGuests(updated);
+    setProfile({ guests: updated });
+    setGuestDraftName('');
+  }
+
+  function updateGuest(id: string, partial: Partial<TripGuest>) {
+    const updated = guests.map((g) => (g.id === id ? { ...g, ...partial } : g));
+    setGuests(updated);
+    setProfile({ guests: updated });
+  }
+
+  function removeGuest(id: string) {
+    const updated = guests.filter((g) => g.id !== id);
+    setGuests(updated);
+    setProfile({ guests: updated });
+  }
+
+  function syncPartyFromCrew(nextGuests = guests) {
+    const count = 1 + nextGuests.length;
+    let partyType: PartyType = 'solo';
+    if (count === 2) partyType = 'couple';
+    else if (count > 2) partyType = 'family';
+    if (nextGuests.some((g) => g.ageRange === 'child' || g.ageRange === 'teen')) {
+      partyType = 'family';
+    }
+    setProfile({ partyType, guests: nextGuests });
+  }
+
   function finish(skip = false) {
+    const name = displayName.trim();
+    if (name) setProfile({ displayName: name });
+    syncPartyFromCrew(guests);
     if (!skip && homeConfirmed && address) {
       setProfile({ home: { address, location, placeId } });
     }
     saveVehicle();
-    setProfile({ onboardingComplete: true });
+    setProfile({ onboardingComplete: true, displayName: name || profile.displayName, guests });
     setScreen('planner');
   }
 
@@ -171,10 +224,64 @@ export function OnboardingScreen() {
         </div>
 
         {step === 0 && (
+          <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col justify-center">
+            <p className="text-sm uppercase tracking-[0.2em] text-[var(--fg-subtle)]">Step 1</p>
+            <h1 className="mt-3 font-display text-4xl md:text-5xl">
+              What should we call you?
+            </h1>
+            <p className="mt-3 max-w-lg text-[var(--fg-muted)]">
+              First name is perfect — Autopilot and Copilot will address you, and your trip board gets a personal touch.
+            </p>
+            <div className="mt-8 space-y-4">
+              <Label>Your name</Label>
+              <input
+                ref={nameInputRef}
+                autoFocus
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && displayName.trim()) {
+                    setProfile({ displayName: displayName.trim() });
+                    setStep(1);
+                  }
+                }}
+                placeholder="e.g. Maya"
+                className="glass-input h-14 w-full rounded-2xl px-5 text-lg"
+              />
+              {firstName() && (
+                <div className="rounded-2xl border border-[var(--border)] bg-[var(--bg-elevated)] px-5 py-4 shadow-sm">
+                  <p className="text-xs uppercase tracking-[0.16em] text-[var(--fg-subtle)]">preview</p>
+                  <p className="mt-1 font-display text-2xl">
+                    Hey {firstName()} — ready when you are.
+                  </p>
+                  <p className="mt-1 text-sm text-[var(--fg-muted)]">
+                    We&apos;ll cook routes that feel like yours.
+                  </p>
+                </div>
+              )}
+              <Button
+                variant="accent"
+                size="lg"
+                className="mt-2"
+                disabled={!displayName.trim()}
+                onClick={() => {
+                  setProfile({ displayName: displayName.trim() });
+                  setStep(1);
+                }}
+              >
+                That&apos;s me <ArrowRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {step === 1 && (
           <div className="grid flex-1 gap-8 lg:grid-cols-2 lg:items-center">
             <div>
-              <p className="text-sm uppercase tracking-[0.2em] text-[var(--fg-subtle)]">Step 1</p>
-              <h1 className="mt-3 font-display text-4xl md:text-5xl">Where do you live?</h1>
+              <p className="text-sm uppercase tracking-[0.2em] text-[var(--fg-subtle)]">Step 2</p>
+              <h1 className="mt-3 font-display text-4xl md:text-5xl">
+                {firstName() ? `${firstName()}, where do you live?` : 'Where do you live?'}
+              </h1>
               <p className="mt-3 max-w-md text-[var(--fg-muted)]">
                 Pin home as your default start. You&apos;ll see it on the map.
               </p>
@@ -197,7 +304,7 @@ export function OnboardingScreen() {
                   disabled={!homeConfirmed}
                   onClick={() => {
                     setProfile({ home: { address, location, placeId } });
-                    setStep(1);
+                    setStep(2);
                   }}
                 >
                   Pin home & continue <ArrowRight className="h-4 w-4" />
@@ -229,10 +336,10 @@ export function OnboardingScreen() {
           </div>
         )}
 
-        {step === 1 && (
+        {step === 2 && (
           <div className="mx-auto w-full max-w-3xl">
-            <p className="text-sm uppercase tracking-[0.2em] text-[var(--fg-subtle)]">Step 2</p>
-            <h1 className="mt-3 font-display text-4xl">Your ride</h1>
+            <p className="text-sm uppercase tracking-[0.2em] text-[var(--fg-subtle)]">Step 3</p>
+            <h1 className="mt-3 font-display text-4xl">{firstName() ? `${firstName()}'s ride` : 'Your ride'}</h1>
             <p className="mt-2 text-[var(--fg-muted)]">
               Brand → model → fuel/MPG. We use this for budget + charge/fuel stops.
             </p>
@@ -311,7 +418,7 @@ export function OnboardingScreen() {
             )}
 
             <div className="mt-6 flex gap-3">
-              <Button variant="secondary" onClick={() => setStep(0)}>
+              <Button variant="secondary" onClick={() => setStep(1)}>
                 <ArrowLeft className="h-4 w-4" /> Back
               </Button>
               <Button
@@ -320,7 +427,7 @@ export function OnboardingScreen() {
                 disabled={!modelId}
                 onClick={() => {
                   saveVehicle();
-                  setStep(2);
+                  setStep(3);
                 }}
               >
                 Continue <ArrowRight className="h-4 w-4" />
@@ -329,10 +436,10 @@ export function OnboardingScreen() {
           </div>
         )}
 
-        {step === 2 && (
+        {step === 3 && (
           <div className="mx-auto w-full max-w-3xl">
-            <p className="text-sm uppercase tracking-[0.2em] text-[var(--fg-subtle)]">Step 3</p>
-            <h1 className="mt-3 font-display text-4xl">Age group</h1>
+            <p className="text-sm uppercase tracking-[0.2em] text-[var(--fg-subtle)]">Step 4</p>
+            <h1 className="mt-3 font-display text-4xl">Your age group</h1>
             <p className="mt-2 text-[var(--fg-muted)]">
               Shapes side quests (under 21 = no bars, more arcades/parks, etc).
             </p>
@@ -362,19 +469,121 @@ export function OnboardingScreen() {
               ))}
             </div>
             <div className="mt-6 flex gap-3">
-              <Button variant="secondary" onClick={() => setStep(1)}>
+              <Button variant="secondary" onClick={() => setStep(2)}>
                 <ArrowLeft className="h-4 w-4" /> Back
               </Button>
-              <Button variant="accent" size="lg" onClick={() => setStep(3)}>
+              <Button variant="accent" size="lg" onClick={() => setStep(4)}>
                 Continue <ArrowRight className="h-4 w-4" />
               </Button>
             </div>
           </div>
         )}
 
-        {step === 3 && (
+        {step === 4 && (
           <div className="mx-auto w-full max-w-3xl">
-            <p className="text-sm uppercase tracking-[0.2em] text-[var(--fg-subtle)]">Step 4</p>
+            <p className="text-sm uppercase tracking-[0.2em] text-[var(--fg-subtle)]">Step 5</p>
+            <h1 className="mt-3 font-display text-4xl">
+              {firstName() ? `Who's riding with ${firstName()}?` : "Who's coming along?"}
+            </h1>
+            <p className="mt-2 text-[var(--fg-muted)]">
+              Add guests with age ranges so Autopilot plans for the whole crew — kids, teens, adults, the lot.
+            </p>
+
+            <div className="mt-6 rounded-2xl border border-[var(--border)] bg-[var(--bg-elevated)] p-4 shadow-sm">
+              <div className="flex items-center gap-2 text-sm text-[var(--fg-muted)]">
+                <Users className="h-4 w-4 text-[var(--accent)]" />
+                Crew so far · {1 + guests.length} traveler{1 + guests.length === 1 ? '' : 's'}
+                {firstName() ? ` · lead: ${firstName()}` : ''}
+              </div>
+
+              <div className="mt-4 space-y-2">
+                {guests.length === 0 && (
+                  <p className="rounded-xl bg-[var(--bg-muted)] px-3 py-3 text-sm text-[var(--fg-muted)]">
+                    Flying solo is fine — or add people below.
+                  </p>
+                )}
+                {guests.map((g) => (
+                  <div
+                    key={g.id}
+                    className="flex flex-col gap-2 rounded-xl bg-[var(--bg-muted)] p-3 sm:flex-row sm:items-center"
+                  >
+                    <input
+                      value={g.name}
+                      onChange={(e) => updateGuest(g.id, { name: e.target.value })}
+                      className="glass-input h-10 flex-1 rounded-xl px-3"
+                      placeholder="Guest name"
+                    />
+                    <select
+                      value={g.ageRange}
+                      onChange={(e) =>
+                        updateGuest(g.id, { ageRange: e.target.value as GuestAgeRange })
+                      }
+                      className="glass-input h-10 rounded-xl px-3 sm:w-44"
+                    >
+                      {GUEST_AGE_OPTIONS.map((opt) => (
+                        <option key={opt.id} value={opt.id}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => removeGuest(g.id)}
+                      className="inline-flex h-10 w-10 items-center justify-center rounded-xl text-[var(--fg-muted)] hover:bg-[var(--bg)] hover:text-[var(--color-danger)]"
+                      aria-label={`Remove ${g.name}`}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-4 flex flex-col gap-2 border-t border-[var(--border)] pt-4 sm:flex-row">
+                <input
+                  value={guestDraftName}
+                  onChange={(e) => setGuestDraftName(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && addGuest()}
+                  placeholder="Guest name"
+                  className="glass-input h-11 flex-1 rounded-xl px-3"
+                />
+                <select
+                  value={guestDraftAge}
+                  onChange={(e) => setGuestDraftAge(e.target.value as GuestAgeRange)}
+                  className="glass-input h-11 rounded-xl px-3 sm:w-44"
+                >
+                  {GUEST_AGE_OPTIONS.map((opt) => (
+                    <option key={opt.id} value={opt.id}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+                <Button variant="secondary" onClick={addGuest} disabled={!guestDraftName.trim()}>
+                  <Plus className="h-4 w-4" /> Add
+                </Button>
+              </div>
+            </div>
+
+            <div className="mt-6 flex gap-3">
+              <Button variant="secondary" onClick={() => setStep(3)}>
+                <ArrowLeft className="h-4 w-4" /> Back
+              </Button>
+              <Button
+                variant="accent"
+                size="lg"
+                onClick={() => {
+                  syncPartyFromCrew(guests);
+                  setStep(5);
+                }}
+              >
+                {guests.length ? 'Continue with crew' : 'Just me'} <ArrowRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {step === 5 && (
+          <div className="mx-auto w-full max-w-3xl">
+            <p className="text-sm uppercase tracking-[0.2em] text-[var(--fg-subtle)]">Step 6</p>
             <h1 className="mt-3 font-display text-4xl">What are you into?</h1>
             <p className="mt-2 text-[var(--fg-muted)]">
               Pick as many as you want — side activities follow these tags.
@@ -405,19 +614,19 @@ export function OnboardingScreen() {
               })}
             </div>
             <div className="mt-6 flex gap-3">
-              <Button variant="secondary" onClick={() => setStep(2)}>
+              <Button variant="secondary" onClick={() => setStep(4)}>
                 <ArrowLeft className="h-4 w-4" /> Back
               </Button>
-              <Button variant="accent" size="lg" onClick={() => setStep(4)}>
+              <Button variant="accent" size="lg" onClick={() => setStep(6)}>
                 Continue <ArrowRight className="h-4 w-4" />
               </Button>
             </div>
           </div>
         )}
 
-        {step === 4 && (
+        {step === 6 && (
           <div className="mx-auto w-full max-w-3xl">
-            <p className="text-sm uppercase tracking-[0.2em] text-[var(--fg-subtle)]">Step 5</p>
+            <p className="text-sm uppercase tracking-[0.2em] text-[var(--fg-subtle)]">Step 7</p>
             <h1 className="mt-3 font-display text-4xl">Trip defaults</h1>
             <p className="mt-2 text-[var(--fg-muted)]">Skippable — Autopilot uses these every time.</p>
 
@@ -503,11 +712,12 @@ export function OnboardingScreen() {
                 </div>
               </div>
               <div className="flex flex-wrap gap-3 pt-2">
-                <Button variant="secondary" onClick={() => setStep(3)}>
+                <Button variant="secondary" onClick={() => setStep(5)}>
                   <ArrowLeft className="h-4 w-4" /> Back
                 </Button>
                 <Button variant="accent" size="lg" onClick={() => finish(false)}>
-                  Start planning <ArrowRight className="h-4 w-4" />
+                  {firstName() ? `Let's go, ${firstName()}` : 'Start planning'}{' '}
+                  <ArrowRight className="h-4 w-4" />
                 </Button>
               </div>
             </div>

@@ -248,7 +248,11 @@ export function TripWizard() {
                     </span>
                   )}
                 </div>
-                <h2 className="mt-1 font-display text-2xl md:text-3xl">build your roadtrip</h2>
+                <h2 className="mt-1 font-display text-2xl md:text-3xl">
+                  {profile.displayName?.trim()
+                    ? `build ${profile.displayName.trim().split(/\s+/)[0]}'s roadtrip`
+                    : 'build your roadtrip'}
+                </h2>
               </div>
               <button type="button" disabled={running} onClick={close} className="rounded-full bg-[var(--bg-muted)] p-2">
                 <X className="h-4 w-4" />

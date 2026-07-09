@@ -25,12 +25,17 @@ import { reverseGeocode, searchPlace } from '@/lib/google/maps';
 import { recalculateRoutes } from '@/lib/ai/engine';
 import { cn } from '@/lib/utils';
 import { useKeysStore } from '@/stores/keysStore';
+import { useProfileStore } from '@/stores/profileStore';
 import { useTripStore } from '@/stores/tripStore';
 import { useUIStore } from '@/stores/uiStore';
 import type { Stop } from '@/types';
 
 export function PlannerScreen() {
   const trip = useTripStore((s) => s.activeTrip);
+  const displayName = useProfileStore((s) => s.profile.displayName);
+  const guests = useProfileStore((s) => s.profile.guests);
+  const firstName = displayName.trim().split(/\s+/)[0] || '';
+  const crewCount = 1 + (guests?.length || 0);
   const addStop = useTripStore((s) => s.addStop);
   const saveActiveToLibrary = useTripStore((s) => s.saveActiveToLibrary);
   const setTripWizardOpen = useUIStore((s) => s.setTripWizardOpen);
@@ -134,7 +139,15 @@ export function PlannerScreen() {
     <div className="relative flex h-full flex-col overflow-hidden bg-[var(--bg)]">
       <header className="no-print absolute left-0 right-0 top-0 z-20 map-fade-top px-4 pb-10 pt-4 md:px-6">
         <div className="flex items-center justify-between gap-3">
-          <BrandLockup />
+          <div className="min-w-0">
+            <BrandLockup />
+            {firstName && (
+              <p className="mt-1 truncate text-sm text-[var(--fg-muted)]">
+                Hey {firstName}
+                {crewCount > 1 ? ` · crew of ${crewCount}` : ''}
+              </p>
+            )}
+          </div>
           <div className="flex items-center gap-2">
             <Button
               size="sm"

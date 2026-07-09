@@ -17,6 +17,7 @@ export type PartyType = 'solo' | 'couple' | 'family' | 'pets';
 export type ThemeMode = 'light' | 'dark';
 export type FuelType = 'gas' | 'diesel' | 'electric' | 'hybrid' | 'plugin_hybrid';
 export type AgeGroup = 'under21' | 'young_adult' | 'adult' | 'senior';
+export type GuestAgeRange = 'child' | 'teen' | AgeGroup;
 export type HighwayPreference = 'highways' | 'scenic_roads' | 'mix';
 export type GenerationSpeed = 'fast' | 'beautiful';
 
@@ -101,7 +102,15 @@ export interface VehicleProfile {
   customLabel?: string;
 }
 
+export interface TripGuest {
+  id: string;
+  name: string;
+  ageRange: GuestAgeRange;
+}
+
 export interface TravelerProfile {
+  displayName: string;
+  guests: TripGuest[];
   home: {
     address: string;
     placeId?: string;
@@ -311,6 +320,15 @@ export const AGE_GROUP_OPTIONS: { id: AgeGroup; label: string; blurb: string }[]
   { id: 'senior', label: '55+', blurb: 'Scenic, history, easy pace' },
 ];
 
+export const GUEST_AGE_OPTIONS: { id: GuestAgeRange; label: string; blurb: string }[] = [
+  { id: 'child', label: 'Under 12', blurb: 'Kid-friendly · parks, ice cream, easy days' },
+  { id: 'teen', label: '13–17', blurb: 'Arcades, thrills, food halls — no bars' },
+  { id: 'under21', label: '18–20', blurb: 'All-ages fun · no alcohol stops' },
+  { id: 'young_adult', label: '21–34', blurb: 'Nightlife OK · foodie · live music' },
+  { id: 'adult', label: '35–54', blurb: 'Balanced · views, culture, comfort' },
+  { id: 'senior', label: '55+', blurb: 'Scenic · history · easy pace' },
+];
+
 export const ACTIVITY_TAG_OPTIONS: { id: ActivityTag; label: string; ages?: AgeGroup[] }[] = [
   { id: 'networking', label: 'Networking', ages: ['young_adult', 'adult'] },
   { id: 'games', label: 'Games / board cafés' },
@@ -355,6 +373,8 @@ export const ACTIVITY_TAG_OPTIONS: { id: ActivityTag; label: string; ages?: AgeG
 ];
 
 export const DEFAULT_PROFILE: TravelerProfile = {
+  displayName: '',
+  guests: [],
   home: null,
   travelStyle: 'balanced',
   interests: [],

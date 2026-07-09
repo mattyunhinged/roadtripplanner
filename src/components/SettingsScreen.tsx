@@ -1,13 +1,21 @@
 import { useState } from 'react';
-import { Check, Moon, Sun, Trash2, X } from 'lucide-react';
+import { Check, Moon, Plus, Sun, Trash2, Users, X } from 'lucide-react';
 import { Button, FieldError, Input, Label, Segmented, Spinner } from '@/components/ui';
 import { getAIProvider } from '@/lib/ai/provider';
 import { validateGoogleMapsKey } from '@/lib/google/maps';
 import { detectProvider } from '@/lib/utils';
 import { maskKey } from '@/lib/storage';
 import { useKeysStore } from '@/stores/keysStore';
+import { useProfileStore } from '@/stores/profileStore';
 import { useUIStore } from '@/stores/uiStore';
-import { ANTHROPIC_MODELS, OPENAI_MODELS, type AIProviderId } from '@/types';
+import {
+  ANTHROPIC_MODELS,
+  GUEST_AGE_OPTIONS,
+  OPENAI_MODELS,
+  type AIProviderId,
+  type GuestAgeRange,
+  type TripGuest,
+} from '@/types';
 
 export function SettingsScreen() {
   const keys = useKeysStore((s) => s.keys);
@@ -16,6 +24,8 @@ export function SettingsScreen() {
   const updateKeys = useKeysStore((s) => s.updateKeys);
   const clearKeys = useKeysStore((s) => s.clearKeys);
   const setSettings = useKeysStore((s) => s.setSettings);
+  const profile = useProfileStore((s) => s.profile);
+  const setProfile = useProfileStore((s) => s.setProfile);
   const setScreen = useUIStore((s) => s.setScreen);
   const showToast = useUIStore((s) => s.showToast);
 
@@ -28,6 +38,28 @@ export function SettingsScreen() {
   const [aiError, setAiError] = useState('');
   const [mapsError, setMapsError] = useState('');
   const [mpg, setMpg] = useState(String(settings.vehicleMpg ?? ''));
+  const [displayName, setDisplayName] = useState(profile.displayName || '');
+  const [guests, setGuests] = useState<TripGuest[]>(
+    profile.guests?.length ? profile.guests.map((g) => ({ ...g })) : [],
+  );
+  const [guestDraftName, setGuestDraftName] = useState('');
+  const [guestDraftAge, setGuestDraftAge] = useState<GuestAgeRange>('young_adult');
+
+  function persistCrew(nextName = displayName, nextGuests = guests) {
+    const count = 1 + nextGuests.length;
+    let partyType = profile.partyType;
+    if (count === 1) partyType = 'solo';
+    else if (count === 2) partyType = 'couple';
+    else partyType = 'family';
+    if (nextGuests.some((g) => g.ageRange === 'child' || g.ageRange === 'teen')) {
+      partyType = 'family';
+    }
+    setProfile({
+      displayName: nextName.trim(),
+      guests: nextGuests,
+      partyType,
+    });
+  }
 
   async function save() {
     const model = provider === 'openai' ? settings.openaiModel : settings.anthropicModel;
@@ -50,6 +82,7 @@ export function SettingsScreen() {
     setSettings({
       vehicleMpg: mpg ? Number(mpg) : null,
     });
+    persistCrew();
     showToast('Settings saved', 'success');
     setScreen('planner');
   }
@@ -65,6 +98,114 @@ export function SettingsScreen() {
         </div>
 
         <div className="space-y-8">
+          <section className="rounded-3xl border border-[var(--border)] bg-[var(--bg-elevated)] p-5">
+            <h2 className="font-medium">You & crew</h2>
+            <p className="mt-1 text-sm text-[var(--fg-muted)]">
+              Autopilot addresses you by name and plans for every guest&apos;s age range.
+            </p>
+            <div className="mt-4 space-y-4">
+              <div>
+                <Label>Your name</Label>
+                <Input
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  onBlur={() => persistCrew()}
+                  placeholder="First name"
+                />
+              </div>
+              <div>
+                <div className="mb-2 flex items-center gap-2 text-sm text-[var(--fg-muted)]">
+                  <Users className="h-4 w-4 text-[var(--accent)]" />
+                  Guests · {guests.length}
+                </div>
+                <div className="space-y-2">
+                  {guests.map((g) => (
+                    <div key={g.id} className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                      <Input
+                        value={g.name}
+                        onChange={(e) => {
+                          const next = guests.map((x) =>
+                            x.id === g.id ? { ...x, name: e.target.value } : x,
+                          );
+                          setGuests(next);
+                        }}
+                        onBlur={() => persistCrew(displayName, guests)}
+                        placeholder="Guest name"
+                      />
+                      <select
+                        value={g.ageRange}
+                        onChange={(e) => {
+                          const next = guests.map((x) =>
+                            x.id === g.id
+                              ? { ...x, ageRange: e.target.value as GuestAgeRange }
+                              : x,
+                          );
+                          setGuests(next);
+                          persistCrew(displayName, next);
+                        }}
+                        className="h-11 rounded-xl border border-[var(--border)] bg-[var(--bg)] px-3 sm:w-44"
+                      >
+                        {GUEST_AGE_OPTIONS.map((opt) => (
+                          <option key={opt.id} value={opt.id}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const next = guests.filter((x) => x.id !== g.id);
+                          setGuests(next);
+                          persistCrew(displayName, next);
+                        }}
+                        className="inline-flex h-11 w-11 items-center justify-center rounded-xl text-[var(--fg-muted)] hover:bg-[var(--bg-muted)] hover:text-[var(--color-danger)]"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                  <Input
+                    value={guestDraftName}
+                    onChange={(e) => setGuestDraftName(e.target.value)}
+                    placeholder="Add guest name"
+                  />
+                  <select
+                    value={guestDraftAge}
+                    onChange={(e) => setGuestDraftAge(e.target.value as GuestAgeRange)}
+                    className="h-11 rounded-xl border border-[var(--border)] bg-[var(--bg)] px-3 sm:w-44"
+                  >
+                    {GUEST_AGE_OPTIONS.map((opt) => (
+                      <option key={opt.id} value={opt.id}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                  <Button
+                    variant="secondary"
+                    disabled={!guestDraftName.trim()}
+                    onClick={() => {
+                      const next = [
+                        ...guests,
+                        {
+                          id: crypto.randomUUID(),
+                          name: guestDraftName.trim(),
+                          ageRange: guestDraftAge,
+                        },
+                      ];
+                      setGuests(next);
+                      setGuestDraftName('');
+                      persistCrew(displayName, next);
+                    }}
+                  >
+                    <Plus className="h-4 w-4" /> Add
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </section>
+
           <section className="rounded-3xl border border-[var(--border)] bg-[var(--bg-elevated)] p-5">
             <h2 className="font-medium">Appearance</h2>
             <div className="mt-3 flex items-center gap-3">

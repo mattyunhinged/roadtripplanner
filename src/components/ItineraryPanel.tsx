@@ -25,6 +25,7 @@ import {
 import { categoryLabel, googleMapsDayUrl } from '@/lib/ai/tripPatch';
 import { runAskAi, recalculateRoutes } from '@/lib/ai/engine';
 import { cn, formatCurrency, formatDuration, formatMiles } from '@/lib/utils';
+import { useProfileStore } from '@/stores/profileStore';
 import { useTripStore } from '@/stores/tripStore';
 import { useUIStore } from '@/stores/uiStore';
 import { CATEGORY_COLORS, type DriveLeg, type Stop } from '@/types';
@@ -211,6 +212,8 @@ function SideQuestRail({ stops }: { stops: Stop[] }) {
 
 export function ItineraryPanel() {
   const trip = useTripStore((s) => s.activeTrip);
+  const displayName = useProfileStore((s) => s.profile.displayName);
+  const guests = useProfileStore((s) => s.profile.guests);
   const reorderDayStops = useTripStore((s) => s.reorderDayStops);
   const dayFilter = useUIStore((s) => s.dayFilter);
   const setDayFilter = useUIStore((s) => s.setDayFilter);
@@ -247,9 +250,13 @@ export function ItineraryPanel() {
           </div>
         </div>
         <div className="text-center">
-          <h2 className="font-display text-3xl">blank map energy</h2>
+          <h2 className="font-display text-3xl">
+            {displayName ? `blank map energy, ${displayName.split(/\s+/)[0]}` : 'blank map energy'}
+          </h2>
           <p className="mt-2 text-sm text-[var(--fg-muted)]">
-            Hit Autopilot. One sentence. We&apos;ll cook the whole route.
+            {guests?.length
+              ? `Plan for you + ${guests.length} guest${guests.length === 1 ? '' : 's'}. Hit New trip — one flow, whole route.`
+              : 'Hit Autopilot. One sentence. We\'ll cook the whole route.'}
           </p>
         </div>
         <button
@@ -304,7 +311,7 @@ export function ItineraryPanel() {
         <div className="absolute inset-0 bg-gradient-to-t from-[var(--bg-elevated)] via-[var(--bg-elevated)]/85 to-transparent" />
         <div className="relative px-5 pb-3 pt-2">
           <div className="text-[10px] uppercase tracking-[0.18em] text-[var(--fg-subtle)]">
-            your trip
+            {displayName ? `${displayName.split(/\s+/)[0]}'s trip` : 'your trip'}
           </div>
           <h2 className="font-display text-2xl leading-tight">{trip.title}</h2>
           {trip.vibe && (

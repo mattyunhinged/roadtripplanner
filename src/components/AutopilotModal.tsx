@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { Button, Spinner, TextArea } from '@/components/ui';
 import { runAutopilot } from '@/lib/ai/engine';
+import { useProfileStore } from '@/stores/profileStore';
 import { useUIStore } from '@/stores/uiStore';
 import { cn } from '@/lib/utils';
 import type { AutopilotLogEntry } from '@/types';
@@ -40,6 +41,8 @@ export function AutopilotModal() {
   const progress = useUIStore((s) => s.autopilotProgress);
   const clearProgress = useUIStore((s) => s.clearAutopilotProgress);
   const showToast = useUIStore((s) => s.showToast);
+  const displayName = useProfileStore((s) => s.profile.displayName);
+  const firstName = displayName.trim().split(/\s+/)[0] || '';
   const [prompt, setPrompt] = useState('');
   const [running, setRunning] = useState(false);
   const [error, setError] = useState('');
@@ -105,7 +108,7 @@ export function AutopilotModal() {
                     )}
                   </div>
                   <h2 className="mt-2 font-display text-3xl md:text-4xl">
-                    where we going?
+                    {firstName ? `${firstName}, where we going?` : 'where we going?'}
                   </h2>
                   <p className="mt-1 text-sm text-[var(--fg-muted)]">
                     one sentence. we&apos;ll build the whole trip + side quests.
