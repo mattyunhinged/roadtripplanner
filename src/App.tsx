@@ -26,11 +26,15 @@ export default function App() {
   const setScreen = useUIStore((s) => s.setScreen);
 
   useEffect(() => {
-    hydrateKeys();
-    hydrateProfile();
-    // Chat before trips so bindTrip can keep the matching thread
-    hydrateChat();
-    hydrateTrips();
+    try {
+      hydrateKeys();
+      hydrateProfile();
+      // Chat before trips so bindTrip can keep the matching thread
+      hydrateChat();
+      hydrateTrips();
+    } catch (error) {
+      console.error('Hydrate failed', error);
+    }
   }, [hydrateKeys, hydrateProfile, hydrateTrips, hydrateChat]);
 
   useEffect(() => {

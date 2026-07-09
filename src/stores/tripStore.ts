@@ -43,20 +43,33 @@ export const useTripStore = create<TripState>((set, get) => ({
   library: [],
 
   hydrate: () => {
-    const library = loadJSON<Trip[]>(LIBRARY_STORAGE, []);
-    const activeTrip = loadJSON<Trip | null>(ACTIVE_STORAGE, null);
-    set({ library, activeTrip });
-    useChatStore.getState().bindTrip(activeTrip?.id ?? null);
-    void (async () => {
-      const hydratedActive = await hydrateBoardImage(activeTrip);
-      const hydratedLibrary = await Promise.all(
-        library.map(async (t) => (await hydrateBoardImage(t)) || t),
-      );
-      set({
-        activeTrip: hydratedActive,
-        library: hydratedLibrary,
-      });
-    })();
+    try {
+      const library = loadJSON<Trip[]>(LIBRARY_STORAGE, []);
+      const activeTrip = loadJSON<Trip | null>(ACTIVE_STORAGE, null);
+      const safeLibrary = Array.isArray(library) ? library : [];
+      set({ library: safeLibrary, activeTrip: activeTrip || null });
+      try {
+        useChatStore.getState().bindTrip(activeTrip?.id ?? null);
+      } catch {
+        // chat bind is best-effort
+      }
+      void (async () => {
+        try {
+          const hydratedActive = await hydrateBoardImage(activeTrip);
+          const hydratedLibrary = await Promise.all(
+            safeLibrary.map(async (t) => (await hydrateBoardImage(t)) || t),
+          );
+          set({
+            activeTrip: hydratedActive,
+            library: hydratedLibrary,
+          });
+        } catch {
+          // keep unhydrated trip rather than blanking the app
+        }
+      })();
+    } catch {
+      set({ library: [], activeTrip: null });
+    }
   },
 
   setActiveTrip: (trip) => {

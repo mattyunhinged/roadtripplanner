@@ -33,10 +33,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
   status: '',
 
   hydrate: () => {
-    const messages = loadJSON<ChatMessage[]>(CHAT_STORAGE, []);
+    const raw = loadJSON<ChatMessage[] | null>(CHAT_STORAGE, []);
+    const messages = Array.isArray(raw) ? raw : [];
     const tripId = loadJSON<string | null>(CHAT_TRIP_KEY, null);
-    // Drop empty assistant placeholders left from a crashed stream
-    const cleaned = messages.filter((m) => m.role !== 'assistant' || m.content.trim().length > 0);
+    // Drop empty/corrupt assistant placeholders left from a crashed stream
+    const cleaned = messages
+      .filter((m) => m && (m.role === 'user' || m.role === 'assistant' || m.role === 'system'))
+      .map((m) => ({
+        ...m,
+        content: typeof m.content === 'string' ? m.content : '',
+      }))
+      .filter((m) => m.role !== 'assistant' || m.content.trim().length > 0);
     set({ messages: cleaned, tripId });
   },
 

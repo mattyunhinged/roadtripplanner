@@ -87,11 +87,16 @@ export async function hydrateBoardImage<T extends { id: string; boardImageUrl?: 
   if (trip.boardImageUrl.startsWith('data:') || trip.boardImageUrl.startsWith('http')) {
     return trip;
   }
-  if (trip.boardImageUrl.startsWith('idb:') || trip.boardImageUrl === `idb:${trip.id}`) {
+  try {
+    if (typeof indexedDB === 'undefined') return trip;
+    if (trip.boardImageUrl.startsWith('idb:') || trip.boardImageUrl === `idb:${trip.id}`) {
+      const stored = await loadBoardImage(trip.id);
+      if (stored) return { ...trip, boardImageUrl: stored };
+    }
     const stored = await loadBoardImage(trip.id);
     if (stored) return { ...trip, boardImageUrl: stored };
+  } catch {
+    // ignore corrupt board refs
   }
-  const stored = await loadBoardImage(trip.id);
-  if (stored) return { ...trip, boardImageUrl: stored };
   return trip;
 }
