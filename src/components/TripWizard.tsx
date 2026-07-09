@@ -16,7 +16,8 @@ import {
   X,
   Zap,
 } from 'lucide-react';
-import { Button, Spinner, TextArea } from '@/components/ui';
+import { v4 as uuid } from 'uuid';
+import { Button, Label, Spinner, TextArea } from '@/components/ui';
 import { runAutopilot } from '@/lib/ai/engine';
 import { MAP_STYLES_DARK, MAP_STYLES_LIGHT } from '@/lib/google/maps';
 import { cn } from '@/lib/utils';
@@ -33,10 +34,18 @@ import {
   type GenerationSpeed,
   type HighwayPreference,
   type LatLng,
+  type StopDensity,
+  type TripMustStop,
   type TripPrefs,
 } from '@/types';
 
 const WIZARD_STEPS = ['Start', 'Roads', 'Vibes', 'Mode', 'Generate'] as const;
+
+const DENSITY_OPTIONS: { id: StopDensity; label: string; blurb: string }[] = [
+  { id: 'sparse', label: 'Sparse', blurb: 'Fewer stops · more drive' },
+  { id: 'balanced', label: 'Balanced', blurb: 'Solid mix of stops + miles' },
+  { id: 'packed', label: 'Packed', blurb: 'Max places · shorter hops' },
+];
 
 function LogIcon({ kind }: { kind?: AutopilotLogEntry['kind'] }) {
   if (kind === 'place') return <MapPin className="h-3.5 w-3.5 text-[var(--color-sage)]" />;
@@ -47,7 +56,7 @@ function LogIcon({ kind }: { kind?: AutopilotLogEntry['kind'] }) {
   return <Sparkles className="h-3.5 w-3.5 text-[var(--fg-subtle)]" />;
 }
 
-function StartMarker({ position }: { position: LatLng }) {
+function StartMarker({ position, pan = true }: { position: LatLng; pan?: boolean }) {
   const map = useMap();
   useEffect(() => {
     if (!map) return;
@@ -64,9 +73,54 @@ function StartMarker({ position }: { position: LatLng }) {
         strokeWeight: 2,
       },
     });
-    map.panTo(position);
+    if (pan) map.panTo(position);
     return () => marker.setMap(null);
-  }, [map, position.lat, position.lng]);
+  }, [map, position.lat, position.lng, pan]);
+  return null;
+}
+
+function MustStopMarkers({
+  start,
+  stops,
+}: {
+  start: LatLng | null;
+  stops: TripMustStop[];
+}) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!map || !stops.length) return;
+    const markers: google.maps.Marker[] = [];
+    const bounds = new google.maps.LatLngBounds();
+    if (start) bounds.extend(start);
+    stops.forEach((s, i) => {
+      bounds.extend(s.location);
+      markers.push(
+        new google.maps.Marker({
+          map,
+          position: s.location,
+          title: s.name,
+          label: {
+            text: String(i + 1),
+            color: '#fff',
+            fontSize: '11px',
+            fontWeight: '700',
+          },
+          icon: {
+            path: google.maps.SymbolPath.CIRCLE,
+            scale: 10,
+            fillColor: '#5BA3A8',
+            fillOpacity: 1,
+            strokeColor: '#fff',
+            strokeWeight: 2,
+          },
+        }),
+      );
+    });
+    map.fitBounds(bounds, 48);
+    return () => markers.forEach((m) => m.setMap(null));
+  }, [map, start?.lat, start?.lng, stops]);
+
   return null;
 }
 
@@ -108,6 +162,37 @@ function WaypointPreview() {
   return null;
 }
 
+function DensityPicker({
+  value,
+  onChange,
+}: {
+  value: StopDensity;
+  onChange: (v: StopDensity) => void;
+}) {
+  return (
+    <div className="grid grid-cols-3 gap-2">
+      {DENSITY_OPTIONS.map((opt) => (
+        <button
+          key={opt.id}
+          type="button"
+          onClick={() => onChange(opt.id)}
+          className={cn(
+            'rounded-2xl p-3 text-left transition',
+            value === opt.id
+              ? 'bg-[var(--accent)] text-[var(--accent-fg)]'
+              : 'border border-[var(--border)] bg-[var(--bg-elevated)]',
+          )}
+        >
+          <div className="text-sm font-medium">{opt.label}</div>
+          <div className={cn('mt-0.5 text-[11px]', value === opt.id ? 'opacity-80' : 'text-[var(--fg-muted)]')}>
+            {opt.blurb}
+          </div>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function TripWizard() {
   const open = useUIStore((s) => s.tripWizardOpen);
   const setOpen = useUIStore((s) => s.setTripWizardOpen);
@@ -126,16 +211,22 @@ export function TripWizard() {
     profile.home?.location || null,
   );
   const [startPlaceId, setStartPlaceId] = useState(profile.home?.placeId);
+  const [mustStops, setMustStops] = useState<TripMustStop[]>([]);
+  const [mustDraft, setMustDraft] = useState('');
   const [highways, setHighways] = useState<HighwayPreference>(profile.highwayPreference || 'mix');
   const [ageGroup, setAgeGroup] = useState<AgeGroup>(profile.ageGroup || 'young_adult');
   const [tags, setTags] = useState<ActivityTag[]>(
     profile.activityTags?.length ? [...profile.activityTags] : [],
   );
   const [speed, setSpeed] = useState<GenerationSpeed>('beautiful');
+  const [stopDensity, setStopDensity] = useState<StopDensity>('balanced');
+  const [returnDensity, setReturnDensity] = useState<StopDensity>('balanced');
+  const [roundTrip, setRoundTrip] = useState(false);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState('');
   const [done, setDone] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const mustInputRef = useRef<HTMLInputElement>(null);
   const logRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -147,10 +238,15 @@ export function TripWizard() {
     setStartAddress(profile.home?.address || '');
     setStartLocation(profile.home?.location || null);
     setStartPlaceId(profile.home?.placeId);
+    setMustStops([]);
+    setMustDraft('');
     setHighways(profile.highwayPreference || 'mix');
     setAgeGroup(profile.ageGroup || 'young_adult');
     setTags(profile.activityTags?.length ? [...profile.activityTags] : []);
     setSpeed('beautiful');
+    setStopDensity('balanced');
+    setReturnDensity('balanced');
+    setRoundTrip(false);
   }, [open]);
 
   useEffect(() => {
@@ -168,6 +264,37 @@ export function TripWizard() {
       });
       setStartPlaceId(place.place_id);
     });
+  }, [open, mapsKey, step]);
+
+  useEffect(() => {
+    if (!open || !mapsKey || !mustInputRef.current || !window.google?.maps?.places || step !== 0) {
+      return;
+    }
+    const el = mustInputRef.current;
+    const ac = new google.maps.places.Autocomplete(el, {
+      fields: ['formatted_address', 'geometry', 'place_id', 'name'],
+    });
+    const listener = ac.addListener('place_changed', () => {
+      const place = ac.getPlace();
+      if (!place.geometry?.location) return;
+      const stop: TripMustStop = {
+        id: uuid(),
+        name: place.name || place.formatted_address || 'Place',
+        address: place.formatted_address || place.name || '',
+        placeId: place.place_id,
+        location: {
+          lat: place.geometry.location.lat(),
+          lng: place.geometry.location.lng(),
+        },
+      };
+      setMustStops((prev) => [...prev, stop]);
+      setMustDraft('');
+      el.value = '';
+    });
+    return () => {
+      google.maps.event.removeListener(listener);
+      google.maps.event.clearInstanceListeners(ac);
+    };
   }, [open, mapsKey, step]);
 
   useEffect(() => {
@@ -199,6 +326,10 @@ export function TripWizard() {
       activityTags: tags,
       ageGroup,
       generationSpeed: speed,
+      mustStops,
+      stopDensity,
+      returnDensity,
+      roundTrip,
     };
     try {
       const result = await runAutopilot(value, prefs);
@@ -215,6 +346,10 @@ export function TripWizard() {
     if (running) return;
     setOpen(false);
     clearProgress();
+  }
+
+  function removeMustStop(id: string) {
+    setMustStops((prev) => prev.filter((s) => s.id !== id));
   }
 
   return (
@@ -295,12 +430,65 @@ export function TripWizard() {
                       placeholder="Where are we leaving from?"
                       className="glass-input h-12 w-full rounded-2xl px-4"
                     />
-                    <TextArea
-                      value={prompt}
-                      onChange={(e) => setPrompt(e.target.value)}
-                      placeholder='optional vibe · "3 day surprise, food + views"'
-                      className="min-h-[72px]"
-                    />
+
+                    <div className="space-y-2">
+                      <div>
+                        <h4 className="font-medium">Must-visit places</h4>
+                        <p className="mt-0.5 text-sm text-[var(--fg-muted)]">
+                          Add as many as you want — they pin on the map instantly. Autopilot will
+                          route through these and fill the gaps.
+                        </p>
+                      </div>
+                      <input
+                        ref={mustInputRef}
+                        value={mustDraft}
+                        onChange={(e) => setMustDraft(e.target.value)}
+                        placeholder="Search a place to pin…"
+                        className="glass-input h-11 w-full rounded-2xl px-4"
+                      />
+                      {mustStops.length > 0 && (
+                        <ul className="space-y-1.5">
+                          {mustStops.map((stop, i) => (
+                            <li
+                              key={stop.id}
+                              className="flex items-start gap-2 rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2"
+                            >
+                              <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--color-sky)] text-[10px] font-bold text-white">
+                                {i + 1}
+                              </span>
+                              <div className="min-w-0 flex-1">
+                                <div className="truncate text-sm font-medium">{stop.name}</div>
+                                <div className="truncate text-xs text-[var(--fg-muted)]">
+                                  {stop.address}
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => removeMustStop(stop.id)}
+                                className="shrink-0 rounded-full bg-[var(--bg-muted)] p-1.5 text-[var(--fg-muted)] hover:text-[var(--fg)]"
+                                aria-label={`Remove ${stop.name}`}
+                              >
+                                <X className="h-3.5 w-3.5" />
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+
+                    <div>
+                      <Label>Trip notes for Autopilot</Label>
+                      <p className="mb-1.5 text-sm text-[var(--fg-muted)]">
+                        Tell Autopilot the vibe, constraints, people, or anything special — e.g. &apos;3
+                        weeks west coast, music festivals, keep days under 5h driving&apos;.
+                      </p>
+                      <TextArea
+                        value={prompt}
+                        onChange={(e) => setPrompt(e.target.value)}
+                        placeholder="e.g. 3 weeks west coast, music festivals, keep days under 5h driving"
+                        className="min-h-[72px]"
+                      />
+                    </div>
                     <div className="flex justify-end">
                       <Button
                         variant="accent"
@@ -454,10 +642,69 @@ export function TripWizard() {
                         </p>
                       </button>
                     </div>
-                    <div className="rounded-2xl bg-[var(--bg-muted)] p-3 text-xs text-[var(--fg-muted)]">
+
+                    <div className="space-y-2">
+                      <Label>Stop density</Label>
+                      <p className="text-xs text-[var(--fg-muted)]">How many stops on the outbound leg</p>
+                      <DensityPicker value={stopDensity} onChange={setStopDensity} />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Round trip</Label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setRoundTrip(true)}
+                          className={cn(
+                            'rounded-2xl p-3 text-left text-sm transition',
+                            roundTrip
+                              ? 'bg-[var(--accent)] text-[var(--accent-fg)]'
+                              : 'border border-[var(--border)] bg-[var(--bg-elevated)]',
+                          )}
+                        >
+                          <div className="font-medium">Yes</div>
+                          <div className={cn('mt-0.5 text-[11px]', roundTrip ? 'opacity-80' : 'text-[var(--fg-muted)]')}>
+                            Loop back to start
+                          </div>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setRoundTrip(false)}
+                          className={cn(
+                            'rounded-2xl p-3 text-left text-sm transition',
+                            !roundTrip
+                              ? 'bg-[var(--accent)] text-[var(--accent-fg)]'
+                              : 'border border-[var(--border)] bg-[var(--bg-elevated)]',
+                          )}
+                        >
+                          <div className="font-medium">No</div>
+                          <div className={cn('mt-0.5 text-[11px]', !roundTrip ? 'opacity-80' : 'text-[var(--fg-muted)]')}>
+                            One-way outbound
+                          </div>
+                        </button>
+                      </div>
+                    </div>
+
+                    {roundTrip && (
+                      <div className="space-y-2">
+                        <Label>Return-leg density</Label>
+                        <p className="text-xs text-[var(--fg-muted)]">
+                          How packed the drive home should feel
+                        </p>
+                        <DensityPicker value={returnDensity} onChange={setReturnDensity} />
+                      </div>
+                    )}
+
+                    <div className="rounded-2xl border border-[var(--border)] bg-[var(--bg-elevated)] p-3 text-xs text-[var(--fg-muted)]">
                       <div>Start · {startAddress || '—'}</div>
+                      <div>Must-visits · {mustStops.length}</div>
                       <div>Roads · {highways}</div>
                       <div>Age · {ageGroup} · {tags.length} tags</div>
+                      <div>
+                        Density · {stopDensity}
+                        {roundTrip ? ` · return ${returnDensity}` : ''}
+                        {roundTrip ? ' · round trip' : ' · one-way'}
+                      </div>
                     </div>
                     <div className="flex justify-between">
                       <Button variant="secondary" onClick={() => setStep(2)}>
@@ -554,9 +801,16 @@ export function TripWizard() {
                     >
                       {done && trip ? (
                         <WaypointPreview />
-                      ) : startLocation ? (
-                        <StartMarker position={startLocation} />
-                      ) : null}
+                      ) : (
+                        <>
+                          {startLocation && (
+                            <StartMarker position={startLocation} pan={mustStops.length === 0} />
+                          )}
+                          {mustStops.length > 0 && (
+                            <MustStopMarkers start={startLocation} stops={mustStops} />
+                          )}
+                        </>
+                      )}
                     </Map>
                   </APIProvider>
                 ) : (
@@ -568,6 +822,12 @@ export function TripWizard() {
                   <span className="pointer-events-auto inline-flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--bg-elevated)] px-2.5 py-1 text-[11px] shadow-sm">
                     <Navigation className="h-3 w-3" /> map + waypoints
                   </span>
+                  {mustStops.length > 0 && !done && (
+                    <span className="pointer-events-auto inline-flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--bg-elevated)] px-2.5 py-1 text-[11px] text-[var(--color-sky)] shadow-sm">
+                      <MapPin className="h-3 w-3" /> {mustStops.length} must-visit
+                      {mustStops.length === 1 ? '' : 's'}
+                    </span>
+                  )}
                   {done && (
                     <span className="pointer-events-auto inline-flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--bg-elevated)] px-2.5 py-1 text-[11px] text-[var(--color-sky)] shadow-sm">
                       <Compass className="h-3 w-3" /> side quests teal
