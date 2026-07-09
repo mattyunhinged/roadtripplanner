@@ -11,7 +11,8 @@
     "lint": "oxlint",
     "test": "tsx scripts/smoke-unit.ts",
     "preview": "vite preview",
-    "start": "NODE_ENV=production tsx server/index.ts"
+    "start": "NODE_ENV=production tsx server/index.ts",
+    "serve": "npm run build && NODE_ENV=production PORT=5173 npx tsx server/index.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

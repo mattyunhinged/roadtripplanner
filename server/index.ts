@@ -467,6 +467,6 @@ if (process.env.NODE_ENV === 'production') {
   });
 }
 
-app.listen(PORT, () => {
-  console.log(`On The Road AI proxy listening on http://localhost:${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`On The Road AI proxy listening on http://0.0.0.0:${PORT}`);
 });
