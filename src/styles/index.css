@@ -1,0 +1,236 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-display: "Fraunces", Georgia, serif;
+  --font-sans: "Outfit", system-ui, sans-serif;
+
+  --color-ink: #111418;
+  --color-ink-soft: #181d23;
+  --color-ink-muted: #242b33;
+  --color-paper: #f4f6f8;
+  --color-paper-soft: #ebeef2;
+  --color-paper-muted: #e2e6eb;
+  --color-amber: #e8a54b;
+  --color-amber-deep: #c9842a;
+  --color-sage: #6fa894;
+  --color-sage-deep: #548a78;
+  --color-clay: #d97757;
+  --color-sky: #5aa3bc;
+  --color-steel: #6b8fce;
+  --color-sand: #c4a574;
+  --color-muted: #7a8490;
+  --color-danger: #d45d4a;
+  --color-success: #4f9d72;
+}
+
+:root {
+  --bg: #f2f4f7;
+  --bg-elevated: #ffffff;
+  --bg-muted: #ebeef2;
+  --bg-overlay: rgba(17, 20, 24, 0.4);
+  --fg: #111418;
+  --fg-muted: #5a6570;
+  --fg-subtle: #8a939c;
+  --border: rgba(17, 20, 24, 0.08);
+  --border-strong: rgba(17, 20, 24, 0.14);
+  --accent: var(--color-amber-deep);
+  --accent-fg: #ffffff;
+  --map-scrim: linear-gradient(180deg, rgba(242, 244, 247, 0.92) 0%, rgba(242, 244, 247, 0.08) 100%);
+  --shadow-soft: 0 8px 24px rgba(17, 20, 24, 0.06);
+  --panel-width: 400px;
+
+  --glass: #ffffff;
+  --glass-strong: #ffffff;
+  --glass-soft: #f7f8fa;
+  --glass-border: rgba(17, 20, 24, 0.08);
+  --glass-border-inner: rgba(17, 20, 24, 0.06);
+  --glass-highlight: transparent;
+  --glass-blur: 0px;
+  --glass-blur-strong: 0px;
+  --glass-shadow: 0 8px 24px rgba(17, 20, 24, 0.06);
+  --liquid-glow: linear-gradient(180deg, #f2f4f7 0%, #eef1f5 100%);
+}
+
+.dark {
+  --bg: #0e1216;
+  --bg-elevated: #171c22;
+  --bg-muted: #1e252d;
+  --bg-overlay: rgba(0, 0, 0, 0.55);
+  --fg: #f0f2f4;
+  --fg-muted: #9aa3ad;
+  --fg-subtle: #6b7480;
+  --border: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.14);
+  --accent: var(--color-amber);
+  --accent-fg: #111418;
+  --map-scrim: linear-gradient(180deg, rgba(14, 18, 22, 0.9) 0%, rgba(14, 18, 22, 0.05) 100%);
+  --shadow-soft: 0 10px 28px rgba(0, 0, 0, 0.35);
+
+  --glass: #171c22;
+  --glass-strong: #171c22;
+  --glass-soft: #1e252d;
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-border-inner: rgba(255, 255, 255, 0.06);
+  --glass-highlight: transparent;
+  --glass-blur: 0px;
+  --glass-blur-strong: 0px;
+  --glass-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+  --liquid-glow: linear-gradient(180deg, #0e1216 0%, #12171c 100%);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--bg);
+  color: var(--fg);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: var(--liquid-glow);
+}
+
+h1,
+h2,
+h3,
+.font-display {
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 999px;
+}
+
+/* ─── Modern surface system (light polish, not frosted glass) ─── */
+
+.glass-panel {
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+  position: relative;
+}
+
+.glass-strong {
+  background: var(--glass-strong);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+  position: relative;
+}
+
+.glass-soft {
+  background: var(--glass-soft);
+  border: 1px solid var(--glass-border-inner);
+}
+
+.glass-input {
+  background: var(--bg-elevated) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--fg);
+}
+
+.glass-input:focus {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border)) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+  outline: none;
+}
+
+.map-fade-top {
+  background: var(--map-scrim);
+}
+
+@keyframes pulse-soft {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+
+.animate-pulse-soft {
+  animation: pulse-soft 1.8s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.animate-shimmer {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.12) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2s ease-in-out infinite;
+}
+
+@keyframes draw-route {
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes stream-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.stream-line {
+  animation: stream-in 0.35s ease-out both;
+}
+
+@media print {
+  body {
+    background: white !important;
+    color: black !important;
+  }
+  body::before { display: none !important; }
+  .no-print { display: none !important; }
+  .print-only { display: block !important; }
+  .print-area {
+    position: static !important;
+    width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
+    background: white !important;
+    color: black !important;
+    box-shadow: none !important;
+  }
+  .glass-panel, .glass-strong {
+    background: white !important;
+    box-shadow: none !important;
+  }
+}
+
+.print-only {
+  display: none;
+}
