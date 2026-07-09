@@ -140,7 +140,7 @@ export function PlannerScreen() {
                 onChange={(e) => setSearch(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && addFromSearch()}
                 placeholder="Search places to add…"
-                className="relative z-10 h-10 flex-1 bg-transparent px-2 text-sm outline-none"
+                className="relative z-10 h-10 flex-1 bg-transparent px-2 text-sm outline-none placeholder:text-[var(--fg-subtle)]"
               />
               <Button size="sm" variant="secondary" className="relative z-10" onClick={addFromSearch}>
                 <Plus className="h-4 w-4" />
@@ -154,7 +154,7 @@ export function PlannerScreen() {
                 addMode && 'ring-2 ring-[var(--accent)]',
               )}
             >
-              {addMode ? 'Click map to drop a stop…' : 'Click map to add stop'}
+              {addMode ? 'tap the map…' : 'tap map to drop a stop'}
             </button>
           </div>
 

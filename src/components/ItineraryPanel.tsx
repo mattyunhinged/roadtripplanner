@@ -16,20 +16,20 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import {
   AlertTriangle,
+  Compass,
   ExternalLink,
   GripVertical,
   Sparkles,
   Star,
 } from 'lucide-react';
-import { Button } from '@/components/ui';
 import { categoryLabel, googleMapsDayUrl } from '@/lib/ai/tripPatch';
 import { runAskAi, recalculateRoutes } from '@/lib/ai/engine';
-import { cn, formatCurrency, formatDuration, formatMiles, priceLevelLabel } from '@/lib/utils';
+import { cn, formatCurrency, formatDuration, formatMiles } from '@/lib/utils';
 import { useTripStore } from '@/stores/tripStore';
 import { useUIStore } from '@/stores/uiStore';
 import { CATEGORY_COLORS, type DriveLeg, type Stop } from '@/types';
 
-function SortableStop({ stop }: { stop: Stop }) {
+function SortableStopCard({ stop }: { stop: Stop }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: stop.id,
   });
@@ -43,115 +43,168 @@ function SortableStop({ stop }: { stop: Stop }) {
     transition,
   };
 
+  const active = hoveredStopId === stop.id || selectedStopId === stop.id;
+
   return (
     <div
       ref={setNodeRef}
       style={style}
       className={cn(
-        'group flex gap-3 rounded-2xl border border-transparent p-2 transition',
-        (hoveredStopId === stop.id || selectedStopId === stop.id) &&
-          'border-[var(--glass-border)] glass-soft',
-        isDragging && 'opacity-80 shadow-lg',
+        'group relative overflow-hidden rounded-2xl transition',
+        isDragging && 'z-10 opacity-90 shadow-xl scale-[1.02]',
+        active && 'ring-2 ring-[var(--accent)]/50',
+        stop.isSideQuest ? 'ring-1 ring-[var(--color-sky)]/40' : '',
       )}
       onMouseEnter={() => setHoveredStopId(stop.id)}
       onMouseLeave={() => setHoveredStopId(null)}
       onClick={() => setSelectedStopId(stop.id)}
     >
-      <button
-        type="button"
-        className="mt-1 cursor-grab text-[var(--fg-subtle)] active:cursor-grabbing"
-        {...attributes}
-        {...listeners}
-      >
-        <GripVertical className="h-4 w-4" />
-      </button>
-      <div
-        className="mt-1 h-12 w-12 shrink-0 overflow-hidden rounded-xl"
-        style={{ background: `${CATEGORY_COLORS[stop.category]}33` }}
-      >
+      <div className="relative aspect-[16/10] w-full overflow-hidden bg-[var(--bg-muted)]">
         {stop.photoUrl ? (
-          <img src={stop.photoUrl} alt="" className="h-full w-full object-cover" />
+          <img
+            src={stop.photoUrl}
+            alt={stop.name}
+            className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+          />
         ) : (
           <div
-            className="flex h-full items-center justify-center text-[10px] font-bold"
-            style={{ color: CATEGORY_COLORS[stop.category] }}
-          >
-            {categoryLabel(stop.category).slice(0, 3).toUpperCase()}
-          </div>
+            className="flex h-full w-full items-end p-3"
+            style={{
+              background: `linear-gradient(145deg, ${CATEGORY_COLORS[stop.category]}55, transparent 70%), var(--bg-muted)`,
+            }}
+          />
         )}
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <div className="truncate font-medium">
-              {stop.mapsUrl ? (
+        <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent" />
+
+        <button
+          type="button"
+          className="absolute left-2 top-2 rounded-full bg-black/35 p-1.5 text-white/80 backdrop-blur-md active:cursor-grabbing"
+          {...attributes}
+          {...listeners}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <GripVertical className="h-3.5 w-3.5" />
+        </button>
+
+        <div className="absolute right-2 top-2 flex gap-1.5">
+          {stop.isSideQuest && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-[var(--color-sky)]/90 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white backdrop-blur">
+              <Compass className="h-3 w-3" /> Side quest
+            </span>
+          )}
+          <span
+            className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white backdrop-blur"
+            style={{ background: `${CATEGORY_COLORS[stop.category]}cc` }}
+          >
+            {categoryLabel(stop.category)}
+          </span>
+        </div>
+
+        <div className="absolute inset-x-0 bottom-0 p-3 text-white">
+          <div className="flex items-end justify-between gap-2">
+            <div className="min-w-0">
+              {stop.timeWindow && (
+                <div className="mb-0.5 text-[10px] uppercase tracking-wider text-white/70">
+                  {stop.timeWindow}
+                </div>
+              )}
+              <div className="truncate font-display text-lg leading-tight">{stop.name}</div>
+              {stop.aiNotes && (
+                <p className="mt-0.5 line-clamp-1 text-xs text-white/75">{stop.aiNotes}</p>
+              )}
+            </div>
+            <div className="flex shrink-0 items-center gap-1.5">
+              {stop.rating != null && (
+                <span className="inline-flex items-center gap-0.5 rounded-full bg-black/35 px-1.5 py-0.5 text-[10px] backdrop-blur">
+                  <Star className="h-3 w-3 fill-[var(--accent)] text-[var(--accent)]" />
+                  {stop.rating.toFixed(1)}
+                </span>
+              )}
+              {stop.mapsUrl && (
                 <a
                   href={stop.mapsUrl}
                   target="_blank"
                   rel="noreferrer"
                   onClick={(e) => e.stopPropagation()}
-                  className="hover:text-[var(--accent)] hover:underline"
+                  className="rounded-full bg-white/20 p-1.5 backdrop-blur hover:bg-white/35"
                 >
-                  {stop.name}
+                  <ExternalLink className="h-3.5 w-3.5" />
                 </a>
-              ) : (
-                stop.name
               )}
-            </div>
-            <div className="mt-0.5 flex flex-wrap gap-2 text-xs text-[var(--fg-subtle)]">
-              <span>{categoryLabel(stop.category)}</span>
-              {stop.timeWindow && <span>{stop.timeWindow}</span>}
-              {stop.rating != null && (
-                <span className="inline-flex items-center gap-0.5">
-                  <Star className="h-3 w-3" /> {stop.rating.toFixed(1)}
-                </span>
-              )}
-              {stop.priceLevel != null && <span>{priceLevelLabel(stop.priceLevel)}</span>}
-              {stop.costEstimate != null && <span>{formatCurrency(stop.costEstimate)}</span>}
             </div>
           </div>
-          {stop.mapsUrl && (
-            <a
-              href={stop.mapsUrl}
-              target="_blank"
-              rel="noreferrer"
-              onClick={(e) => e.stopPropagation()}
-              className="shrink-0 rounded-full p-1.5 text-[var(--fg-subtle)] hover:bg-[var(--glass-soft)] hover:text-[var(--accent)]"
-              title="Open in Google Maps"
-            >
-              <ExternalLink className="h-3.5 w-3.5" />
-            </a>
-          )}
         </div>
-        {stop.aiNotes && (
-          <p className="mt-1 line-clamp-2 text-xs text-[var(--fg-muted)]">{stop.aiNotes}</p>
-        )}
       </div>
     </div>
   );
 }
 
-function DriveSegment({ leg, onAsk }: { leg: DriveLeg; onAsk: () => void }) {
+function DriveChip({ leg, onAsk }: { leg: DriveLeg; onAsk: () => void }) {
   return (
-    <div className="my-1 ml-8 flex items-center justify-between gap-2 border-l-2 border-dashed border-[var(--border)] py-2 pl-4 text-xs text-[var(--fg-muted)]">
-      <div className="flex flex-wrap items-center gap-2">
+    <div className="my-2 flex items-center justify-between gap-2 px-1">
+      <div className="flex flex-wrap items-center gap-2 text-[11px] text-[var(--fg-subtle)]">
+        <span className="h-px w-4 bg-[var(--glass-border)]" />
         <span>
           {formatMiles(leg.distanceMeters)} · {formatDuration(leg.durationSeconds)}
         </span>
         {leg.exceedsMaxDrive && (
           <span className="inline-flex items-center gap-1 text-[var(--color-danger)]">
-            <AlertTriangle className="h-3 w-3" /> Over max drive
+            <AlertTriangle className="h-3 w-3" /> long haul
           </span>
         )}
-        {leg.fuelSuggested && <span className="text-[var(--color-sand)]">Fuel suggested</span>}
+        {leg.fuelSuggested && <span className="text-[var(--color-sand)]">fuel up</span>}
+        <span className="h-px flex-1 min-w-4 bg-[var(--glass-border)]" />
       </div>
       <button
         type="button"
         onClick={onAsk}
-        className="inline-flex items-center gap-1 rounded-full px-2 py-1 hover:bg-[var(--bg-muted)]"
+        className="inline-flex shrink-0 items-center gap-1 rounded-full glass-soft px-2 py-1 text-[10px] text-[var(--fg-muted)] hover:text-[var(--fg)]"
       >
-        <Sparkles className="h-3 w-3" /> Ask AI
+        <Sparkles className="h-3 w-3 text-[var(--accent)]" /> detour?
       </button>
+    </div>
+  );
+}
+
+function SideQuestRail({ stops }: { stops: Stop[] }) {
+  const setSelectedStopId = useUIStore((s) => s.setSelectedStopId);
+  const setHoveredStopId = useUIStore((s) => s.setHoveredStopId);
+  if (!stops.length) return null;
+
+  return (
+    <div className="mb-4">
+      <div className="mb-2 flex items-center gap-2 px-1 text-[11px] font-medium uppercase tracking-[0.14em] text-[var(--color-sky)]">
+        <Compass className="h-3.5 w-3.5" /> Side quests
+      </div>
+      <div className="flex gap-2 overflow-x-auto pb-1">
+        {stops.map((stop) => (
+          <button
+            key={stop.id}
+            type="button"
+            onClick={() => setSelectedStopId(stop.id)}
+            onMouseEnter={() => setHoveredStopId(stop.id)}
+            onMouseLeave={() => setHoveredStopId(null)}
+            className="group relative h-28 w-36 shrink-0 overflow-hidden rounded-2xl"
+          >
+            {stop.photoUrl ? (
+              <img
+                src={stop.photoUrl}
+                alt={stop.name}
+                className="h-full w-full object-cover transition group-hover:scale-105"
+              />
+            ) : (
+              <div
+                className="h-full w-full"
+                style={{ background: `${CATEGORY_COLORS[stop.category]}44` }}
+              />
+            )}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
+            <div className="absolute inset-x-0 bottom-0 p-2 text-left text-white">
+              <div className="line-clamp-2 text-xs font-medium leading-snug">{stop.name}</div>
+            </div>
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -161,6 +214,7 @@ export function ItineraryPanel() {
   const reorderDayStops = useTripStore((s) => s.reorderDayStops);
   const dayFilter = useUIStore((s) => s.dayFilter);
   const setDayFilter = useUIStore((s) => s.setDayFilter);
+  const setAutopilotOpen = useUIStore((s) => s.setAutopilotOpen);
   const showToast = useUIStore((s) => s.showToast);
   const [busy, setBusy] = useState(false);
 
@@ -171,13 +225,39 @@ export function ItineraryPanel() {
     return trip.days.filter((d) => dayFilter === 'all' || d.index === dayFilter);
   }, [trip, dayFilter]);
 
+  const heroPhotos = useMemo(() => {
+    if (!trip) return [];
+    return trip.stops.filter((s) => s.photoUrl).slice(0, 4);
+  }, [trip]);
+
   if (!trip) {
     return (
-      <div className="flex h-full flex-col justify-center px-6 text-center">
-        <h2 className="font-display text-3xl">No trip yet</h2>
-        <p className="mt-2 text-[var(--fg-muted)]">
-          Hit Autopilot and describe the roadtrip you want — or plan it manually.
-        </p>
+      <div className="flex h-full flex-col justify-center gap-5 px-6 py-10">
+        <div className="relative mx-auto h-36 w-full max-w-xs overflow-hidden rounded-3xl">
+          <div
+            className="absolute inset-0"
+            style={{
+              background:
+                'radial-gradient(circle at 30% 30%, rgba(240,180,90,0.35), transparent 50%), radial-gradient(circle at 80% 70%, rgba(107,184,212,0.3), transparent 45%), var(--bg-muted)',
+            }}
+          />
+          <div className="absolute inset-0 flex items-center justify-center">
+            <Compass className="h-12 w-12 text-[var(--accent)] opacity-80" />
+          </div>
+        </div>
+        <div className="text-center">
+          <h2 className="font-display text-3xl">blank map energy</h2>
+          <p className="mt-2 text-sm text-[var(--fg-muted)]">
+            Hit Autopilot. One sentence. We&apos;ll cook the whole route.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setAutopilotOpen(true)}
+          className="mx-auto inline-flex items-center gap-2 rounded-2xl bg-[var(--accent)] px-5 py-3 text-sm font-medium text-[var(--accent-fg)] shadow-lg shadow-[var(--accent)]/25"
+        >
+          <Sparkles className="h-4 w-4" /> Launch Autopilot
+        </button>
       </div>
     );
   }
@@ -202,82 +282,113 @@ export function ItineraryPanel() {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="border-b border-[var(--glass-border-inner)] px-5 py-4">
-        <div className="text-xs uppercase tracking-[0.18em] text-[var(--fg-subtle)]">Trip</div>
-        <h2 className="font-display text-2xl leading-tight">{trip.title}</h2>
-        {trip.vibe && <p className="mt-1 text-sm text-[var(--fg-muted)]">{trip.vibe}</p>}
-        <div className="mt-3 flex flex-wrap gap-3 text-sm">
-          <span>{trip.totalDays} days</span>
-          <span>{Math.round(trip.totalMiles)} mi</span>
-          <span>{formatCurrency(trip.budget.total)}</span>
-        </div>
-        <div className="mt-4 flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => setDayFilter('all')}
-            className={cn(
-              'rounded-full px-3 py-1 text-xs transition',
-              dayFilter === 'all'
-                ? 'bg-[var(--fg)] text-[var(--bg)]'
-                : 'glass-soft text-[var(--fg-muted)]',
-            )}
-          >
-            All days
-          </button>
-          {trip.days.map((day) => (
+      {/* Visual trip header */}
+      <div className="relative shrink-0 overflow-hidden border-b border-[var(--glass-border-inner)]">
+        {heroPhotos.length > 0 ? (
+          <div className="grid h-28 grid-cols-4 gap-0.5">
+            {heroPhotos.map((s) => (
+              <img key={s.id} src={s.photoUrl} alt="" className="h-full w-full object-cover" />
+            ))}
+          </div>
+        ) : (
+          <div className="h-20 bg-gradient-to-br from-[var(--accent)]/20 via-[var(--color-sky)]/15 to-transparent" />
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-[var(--glass-strong)] via-[var(--glass)]/80 to-transparent" />
+        <div className="relative px-5 pb-3 pt-2">
+          <div className="text-[10px] uppercase tracking-[0.18em] text-[var(--fg-subtle)]">
+            your trip
+          </div>
+          <h2 className="font-display text-2xl leading-tight">{trip.title}</h2>
+          {trip.vibe && (
+            <p className="mt-0.5 line-clamp-2 text-xs text-[var(--fg-muted)]">{trip.vibe}</p>
+          )}
+          <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
+            <span className="rounded-full glass-soft px-2 py-0.5">{trip.totalDays}d</span>
+            <span className="rounded-full glass-soft px-2 py-0.5">
+              {Math.round(trip.totalMiles)} mi
+            </span>
+            <span className="rounded-full glass-soft px-2 py-0.5">
+              {formatCurrency(trip.budget.total)}
+            </span>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-1.5">
             <button
-              key={day.index}
               type="button"
-              onClick={() => setDayFilter(day.index)}
+              onClick={() => setDayFilter('all')}
               className={cn(
-                'rounded-full px-3 py-1 text-xs transition',
-                dayFilter === day.index
+                'rounded-full px-2.5 py-1 text-[11px] transition',
+                dayFilter === 'all'
                   ? 'bg-[var(--fg)] text-[var(--bg)]'
                   : 'glass-soft text-[var(--fg-muted)]',
               )}
             >
-              Day {day.index + 1}
+              All
             </button>
-          ))}
+            {trip.days.map((day) => (
+              <button
+                key={day.index}
+                type="button"
+                onClick={() => setDayFilter(day.index)}
+                className={cn(
+                  'rounded-full px-2.5 py-1 text-[11px] transition',
+                  dayFilter === day.index
+                    ? 'bg-[var(--fg)] text-[var(--bg)]'
+                    : 'glass-soft text-[var(--fg-muted)]',
+                )}
+              >
+                D{day.index + 1}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
       <div className="flex-1 overflow-y-auto px-3 py-3">
         {busy && (
-          <div className="mb-2 rounded-xl bg-[var(--bg-muted)] px-3 py-2 text-xs text-[var(--fg-muted)]">
-            Recalculating route…
+          <div className="mb-2 rounded-xl glass-soft px-3 py-2 text-xs text-[var(--fg-muted)]">
+            Recalculating the vibes…
           </div>
         )}
+
+        {dayFilter === 'all' && (
+          <SideQuestRail stops={trip.stops.filter((s) => s.isSideQuest)} />
+        )}
+
         {days.map((day) => {
-          const stops = trip.stops
+          const allDayStops = trip.stops
             .filter((s) => s.dayIndex === day.index)
             .sort((a, b) => a.order - b.order);
-          const stopIds = stops.map((s) => s.id);
+          const mainStops = allDayStops.filter((s) => !s.isSideQuest);
+          const sideStops = allDayStops.filter((s) => s.isSideQuest);
+          const stopIds = allDayStops.map((s) => s.id);
+          const displayStops = mainStops.length ? mainStops : allDayStops;
+
           return (
             <section key={day.index} className="mb-6">
-              <div className="mb-2 flex items-start justify-between gap-2 px-2">
+              <div className="mb-2 flex items-start justify-between gap-2 px-1">
                 <div>
-                  <h3 className="font-display text-lg">
-                    Day {day.index + 1}
+                  <h3 className="font-display text-lg leading-tight">
+                    <span className="text-[var(--fg-subtle)]">D{day.index + 1}</span>
                     {day.title ? ` · ${day.title}` : ''}
                   </h3>
-                  {day.summary && (
-                    <p className="text-xs text-[var(--fg-muted)]">{day.summary}</p>
-                  )}
-                  <div className="mt-1 text-xs text-[var(--fg-subtle)]">
-                    {Math.round(day.miles)} mi · {day.drivingHours.toFixed(1)}h driving ·{' '}
+                  <div className="mt-0.5 text-[11px] text-[var(--fg-subtle)]">
+                    {Math.round(day.miles)} mi · {day.drivingHours.toFixed(1)}h ·{' '}
                     {formatCurrency(day.estimatedSpend)}
                   </div>
                 </div>
                 <a
-                  href={googleMapsDayUrl(stops)}
+                  href={googleMapsDayUrl(allDayStops)}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex items-center gap-1 rounded-full glass-soft px-2.5 py-1 text-xs text-[var(--fg-muted)] hover:text-[var(--fg)]"
+                  className="inline-flex items-center gap-1 rounded-full glass-soft px-2.5 py-1 text-[11px] text-[var(--fg-muted)] hover:text-[var(--fg)]"
                 >
-                  Open in Maps <ExternalLink className="h-3 w-3" />
+                  Maps <ExternalLink className="h-3 w-3" />
                 </a>
               </div>
+
+              {sideStops.length > 0 && dayFilter !== 'all' && (
+                <SideQuestRail stops={sideStops} />
+              )}
 
               <DndContext
                 sensors={sensors}
@@ -285,36 +396,40 @@ export function ItineraryPanel() {
                 onDragEnd={(e) => onDragEnd(day.index, e, stopIds)}
               >
                 <SortableContext items={stopIds} strategy={verticalListSortingStrategy}>
-                  {stops.map((stop, idx) => {
-                    const next = stops[idx + 1];
-                    const leg = next
-                      ? trip.legs.find((l) => l.fromStopId === stop.id && l.toStopId === next.id)
-                      : undefined;
-                    return (
-                      <div key={stop.id}>
-                        <SortableStop stop={stop} />
-                        {leg && (
-                          <DriveSegment
-                            leg={leg}
-                            onAsk={async () => {
-                              try {
-                                const msg = await runAskAi(
-                                  'leg',
-                                  `Find a great lunch or scenic stop between ${stop.name} and ${next.name}`,
-                                );
-                                showToast(msg, 'success');
-                              } catch (error) {
-                                showToast(
-                                  error instanceof Error ? error.message : 'Ask AI failed',
-                                  'error',
-                                );
-                              }
-                            }}
-                          />
-                        )}
-                      </div>
-                    );
-                  })}
+                  <div className="space-y-2">
+                    {displayStops.map((stop, idx) => {
+                      const next = displayStops[idx + 1];
+                      const leg = next
+                        ? trip.legs.find(
+                            (l) => l.fromStopId === stop.id && l.toStopId === next.id,
+                          )
+                        : undefined;
+                      return (
+                        <div key={stop.id}>
+                          <SortableStopCard stop={stop} />
+                          {leg && (
+                            <DriveChip
+                              leg={leg}
+                              onAsk={async () => {
+                                try {
+                                  const msg = await runAskAi(
+                                    'leg',
+                                    `Add a fun scenic or food side quest between ${stop.name} and ${next.name}. Keep it chill.`,
+                                  );
+                                  showToast(msg, 'success');
+                                } catch (error) {
+                                  showToast(
+                                    error instanceof Error ? error.message : 'Ask AI failed',
+                                    'error',
+                                  );
+                                }
+                              }}
+                            />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </SortableContext>
               </DndContext>
             </section>
@@ -322,10 +437,9 @@ export function ItineraryPanel() {
         })}
       </div>
 
-      <div className="border-t border-[var(--glass-border-inner)] px-5 py-3 text-xs text-[var(--fg-subtle)]">
-        Budget · Fuel {formatCurrency(trip.budget.fuel)} · Lodging{' '}
-        {formatCurrency(trip.budget.lodging)} · Food {formatCurrency(trip.budget.food)} · Activities{' '}
-        {formatCurrency(trip.budget.activities)}
+      <div className="border-t border-[var(--glass-border-inner)] px-4 py-2.5 text-[10px] text-[var(--fg-subtle)]">
+        fuel {formatCurrency(trip.budget.fuel)} · stay {formatCurrency(trip.budget.lodging)} · eats{' '}
+        {formatCurrency(trip.budget.food)} · fun {formatCurrency(trip.budget.activities)}
       </div>
     </div>
   );

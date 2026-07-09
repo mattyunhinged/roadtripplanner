@@ -99,9 +99,26 @@ export function ChatDrawer() {
 
             <div className="relative z-10 flex-1 space-y-3 overflow-y-auto px-4 py-4">
               {messages.length === 0 && (
-                <div className="rounded-2xl glass-soft p-4 text-sm text-[var(--fg-muted)]">
-                  Try: “make day 3 more relaxed”, “we&apos;re vegetarians, fix the food stops”, or
-                  “add a national park”.
+                <div className="space-y-2">
+                  <div className="rounded-2xl glass-soft p-4 text-sm text-[var(--fg-muted)]">
+                    spitball anything. i&apos;ll edit the trip live.
+                  </div>
+                  {[
+                    'make day 2 more chill',
+                    'we’re vegetarian — fix food',
+                    'add a chaotic side quest',
+                  ].map((chip) => (
+                    <button
+                      key={chip}
+                      type="button"
+                      onClick={() => {
+                        setInput(chip);
+                      }}
+                      className="mr-2 inline-flex rounded-full glass-soft px-3 py-1.5 text-xs text-[var(--fg-muted)] hover:text-[var(--fg)]"
+                    >
+                      {chip}
+                    </button>
+                  ))}
                 </div>
               )}
               {messages.map((m) => (

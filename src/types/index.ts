@@ -83,6 +83,7 @@ export interface Stop {
   aiNotes?: string;
   website?: string;
   phone?: string;
+  isSideQuest?: boolean;
 }
 
 export interface DriveLeg {

@@ -24,6 +24,7 @@ export const draftStopSchema = z.object({
   timeWindow: z.string().optional(),
   costEstimate: z.number().optional(),
   aiNotes: z.string().optional(),
+  isSideQuest: z.boolean().optional(),
 });
 
 export const draftDaySchema = z.object({
@@ -66,6 +67,7 @@ export const tripEditResponseSchema = z.object({
         searchQuery: z.string().optional(),
         dayIndex: z.number().optional(),
         order: z.number().optional(),
+        isSideQuest: z.boolean().optional(),
       }),
     )
     .optional(),

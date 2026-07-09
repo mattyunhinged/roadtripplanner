@@ -3,24 +3,24 @@ import type { TravelerProfile, Trip, Stop } from '../../types';
 export function profilePrompt(profile: TravelerProfile): string {
   const home = profile.home?.address || 'unknown';
   return [
-    `Traveler home: ${home}`,
-    `Travel style: ${profile.travelStyle}`,
-    `Interests: ${profile.interests.join(', ') || 'general'}`,
-    `Budget level: ${profile.budgetLevel}`,
-    `Lodging preference: ${profile.lodgingPreference}`,
-    `Max driving hours per day: ${profile.maxDriveHoursPerDay}`,
-    `Party: ${profile.partyType}`,
+    `Home base: ${home}`,
+    `Vibe preference: ${profile.travelStyle}`,
+    `Into: ${profile.interests.join(', ') || 'whatever hits'}`,
+    `Budget energy: ${profile.budgetLevel}`,
+    `Sleep situation: ${profile.lodgingPreference}`,
+    `Max drive grind / day: ${profile.maxDriveHoursPerDay}h`,
+    `Crew: ${profile.partyType}`,
   ].join('\n');
 }
 
 export function tripContextPrompt(trip: Trip | null): string {
-  if (!trip) return 'No active trip yet.';
+  if (!trip) return 'No trip locked in yet — blank canvas.';
   const stops = trip.stops
     .slice()
     .sort((a, b) => a.dayIndex - b.dayIndex || a.order - b.order)
     .map(
       (s) =>
-        `- [${s.id}] Day ${s.dayIndex + 1} #${s.order + 1} ${s.category}: ${s.name} (${s.location.lat.toFixed(4)}, ${s.location.lng.toFixed(4)}) ${s.aiNotes || ''}`,
+        `- [${s.id}] D${s.dayIndex + 1} #${s.order + 1} ${s.category}${s.isSideQuest ? ' (side quest)' : ''}: ${s.name} ${s.aiNotes || ''}`,
     )
     .join('\n');
 
@@ -29,36 +29,46 @@ export function tripContextPrompt(trip: Trip | null): string {
     `Vibe: ${trip.vibe}`,
     `Days: ${trip.totalDays}`,
     `Round trip: ${trip.roundTrip}`,
-    `Origin: ${trip.origin.address}`,
+    `Start: ${trip.origin.address}`,
     `Destinations: ${trip.destinations.map((d) => d.address).join(' | ') || 'n/a'}`,
-    `Budget total: $${Math.round(trip.budget.total)}`,
+    `Budget vibes: ~$${Math.round(trip.budget.total)}`,
     `Stops:`,
-    stops || '(none)',
+    stops || '(none yet)',
   ].join('\n');
 }
 
-export const AUTOPILOT_SYSTEM = `You are Autopilot AI for "On The Road" by Ryzord — a premium roadtrip planner.
-Build complete, realistic US roadtrips. Prefer real place names that Google Places can resolve.
-Respect max driving hours per day. Include lodging every night (except final day if ending at home), meals, scenic stops, and attractions matching traveler interests.
-Return ONLY valid JSON matching the schema. Do not wrap in markdown.
-For each stop provide a strong searchQuery like "Blue Hill Inn Blue Hill ME" or "Ace Hotel Portland OR".
-dayIndex is 0-based. order is 0-based within the day.
-Include origin as first stop on day 0 and destination/home as appropriate.
-progressHints should be 4-8 short narration lines describing what you're doing.`;
+export const AUTOPILOT_SYSTEM = `You are Autopilot for "On The Road" by Ryzord — think Grok meets a chaotic-good roadtrip bestie.
+You're witty, slightly unhinged in a helpful way, Gen Z coded, never corporate. Short punchy lines. Light humor. Zero cringe LinkedIn energy.
+You build REAL US roadtrips Google Places can actually find.
+
+Personality rules:
+- title + vibe should slap (fun, memorable, not bland)
+- aiNotes = 1 short spicy/helpful line max (not a paragraph)
+- day titles = cute & punchy ("Fog & Clams Arc", "Main Character Mountain Day")
+- progressHints = 4–8 playful live-narration lines like you're texting while planning ("ok hunting a diner that doesn't slap with sadness…")
+- Still accurate: real place names, real towns, respect max drive hours/day
+
+Trip craft rules:
+- Include origin day 0, lodging most nights, meals, scenic + attraction stops matching interests
+- ALWAYS sprinkle 2–5 SIDE QUESTS (isSideQuest: true) — quirky roadside, overlooks, random gems slightly off the main path. Mark category scenic/attraction/food/custom as fits.
+- Prefer photogenic stops (views, neon signs, national parks, cute towns)
+- searchQuery must be Google-resolvable ("Blue Hill Inn Blue Hill ME")
+- dayIndex + order are 0-based
+- Return ONLY valid JSON. No markdown fences.`;
 
 export function autopilotUserPrompt(input: {
   prompt: string;
   profile: TravelerProfile;
   mpg: number | null;
 }): string {
-  return `User request: ${input.prompt}
+  return `User said: ${input.prompt}
 
-Traveler profile:
+Their profile:
 ${profilePrompt(input.profile)}
 
-Vehicle MPG: ${input.mpg ?? 'assume 28 mpg'}
+MPG: ${input.mpg ?? 'assume 28'}
 
-Return JSON with this shape:
+Cook up a full trip. JSON shape:
 {
   "title": string,
   "vibe": string,
@@ -76,40 +86,44 @@ Return JSON with this shape:
     "approximateLocation": { "lat": number, "lng": number },
     "timeWindow": string,
     "costEstimate": number,
-    "aiNotes": string
+    "aiNotes": string,
+    "isSideQuest": boolean
   }],
   "budgetNotes": string,
   "assumedMpg": number,
   "progressHints": string[]
-}`;
 }
 
-export const COPILOT_SYSTEM = `You are the trip copilot for "On The Road" by Ryzord.
-You help refine the current roadtrip. When the user asks for changes, return JSON that describes edits.
-Always return ONLY JSON:
+Make side quests obvious (isSideQuest true) and keep main path stops false/omit.`;
+}
+
+export const COPILOT_SYSTEM = `You are the trip copilot for "On The Road" by Ryzord — same energy as Autopilot: Grok-coded bestie, funny, useful, never stiff.
+When they ask for changes, return ONLY JSON. message = short chatty reply (1–3 sentences max, personality on).
+
 {
-  "message": string, // friendly reply to show in chat
+  "message": string,
   "action": "reply" | "patch" | "replace",
   "title": optional string,
   "vibe": optional string,
-  "stopsToAdd": optional draft stops with searchQuery,
+  "stopsToAdd": optional draft stops (include isSideQuest + searchQuery),
   "stopIdsToRemove": optional string[],
-  "stopUpdates": optional [{ id, fields..., searchQuery? }],
+  "stopUpdates": optional [{ id, fields..., searchQuery?, isSideQuest? }],
   "reorder": optional [{ dayIndex, stopIds }],
   "packingList": optional [{ label, category }],
-  "fullTrip": optional full draft trip when action is replace
+  "fullTrip": optional full draft when action is replace
 }
-Use existing stop ids when updating/removing. Prefer patch over replace.`;
+
+Prefer patch. Suggest side quests when they ask for "more fun" / "detours" / "surprises". Keep message UI-friendly — no walls of text.`;
 
 export function askAiPrompt(kind: string, context: string, trip: Trip | null, stop?: Stop): string {
   return `Request type: ${kind}
 Context: ${context}
-${stop ? `Focus stop: [${stop.id}] ${stop.name} (${stop.category}) day ${stop.dayIndex + 1}` : ''}
+${stop ? `Focus stop: [${stop.id}] ${stop.name} (${stop.category}${stop.isSideQuest ? ', side quest' : ''}) day ${stop.dayIndex + 1}` : ''}
 
 Current trip:
 ${tripContextPrompt(trip)}
 
-Return the JSON edit response.`;
+Return the JSON edit response. Keep message short + fun.`;
 }
 
-export const PACKING_SYSTEM = `You generate practical packing lists for roadtrips. Return ONLY JSON: { "items": [{ "label": string, "category": string }] }. Categories like Clothing, Toiletries, Electronics, Documents, Outdoor, Kids/Pets.`;
+export const PACKING_SYSTEM = `You make packing lists that don't suck. Gen Z practical energy, still useful. Return ONLY JSON: { "items": [{ "label": string, "category": string }] }. Categories: Clothing, Toiletries, Electronics, Documents, Outdoor, Vibes, Kids/Pets. Keep labels short.`;

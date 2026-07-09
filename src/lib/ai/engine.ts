@@ -57,25 +57,28 @@ function progress(step: string, detail: string, percent: number, phase?: Autopil
 function extractPartialHints(buffer: string): string[] {
   const hints: string[] = [];
   const title = buffer.match(/"title"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"/);
-  if (title?.[1]) hints.push(`Drafting “${title[1].slice(0, 60)}”…`);
+  if (title?.[1]) hints.push(`naming it “${title[1].slice(0, 48)}”…`);
   const vibe = buffer.match(/"vibe"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"/);
-  if (vibe?.[1]) hints.push(`Vibe: ${vibe[1].slice(0, 80)}`);
+  if (vibe?.[1]) hints.push(`vibe check: ${vibe[1].slice(0, 72)}`);
   const stopNames = [...buffer.matchAll(/"name"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"/g)].map(
     (m) => m[1],
   );
   if (stopNames.length) {
     const latest = stopNames[stopNames.length - 1];
-    hints.push(`Considering stop: ${latest}`);
+    hints.push(`eyeing ${latest}`);
   }
   const days = buffer.match(/"totalDays"\s*:\s*(\d+)/);
-  if (days?.[1]) hints.push(`Shaping a ${days[1]}-day route…`);
+  if (days?.[1]) hints.push(`shaping a ${days[1]}-day arc…`);
+  if (buffer.includes('"isSideQuest": true') || buffer.includes('"isSideQuest":true')) {
+    hints.push('sneaking in a side quest…');
+  }
   return hints;
 }
 
 async function resolveDraftTrip(draft: DraftTrip, profile: TravelerProfile): Promise<Trip> {
   const home = profile.home;
   const originQuery = draft.originQuery || home?.address || 'United States';
-  progress('Mapping the start', `Geocoding ${originQuery}…`, 22, 'places');
+  progress('pinning home', `geocoding ${originQuery}…`, 22, 'places');
 
   let originPlace = home
     ? {
@@ -100,7 +103,7 @@ async function resolveDraftTrip(draft: DraftTrip, profile: TravelerProfile): Pro
     throw new Error('Could not resolve trip origin. Check your home address or prompt.');
   }
 
-  log(`Origin locked: ${originPlace.address || originPlace.name}`, {
+  log(`start locked · ${originPlace.address || originPlace.name}`, {
     phase: 'places',
     kind: 'place',
     percent: 25,
@@ -108,7 +111,7 @@ async function resolveDraftTrip(draft: DraftTrip, profile: TravelerProfile): Pro
 
   const destinations = [];
   for (const q of draft.destinationQueries) {
-    progress('Choosing destinations', `Looking up ${q}…`, 28, 'places');
+    progress('scouting destinations', `looking up ${q}…`, 28, 'places');
     const place = (await searchPlace(q)) || (await geocodeAddress(q));
     if (place) {
       destinations.push({
@@ -117,7 +120,7 @@ async function resolveDraftTrip(draft: DraftTrip, profile: TravelerProfile): Pro
         placeId: place.placeId,
         name: place.name,
       });
-      log(`Destination found: ${place.name}`, { phase: 'places', kind: 'place', percent: 30 });
+      log(`found · ${place.name}`, { phase: 'places', kind: 'place', percent: 30 });
     }
   }
 
@@ -129,7 +132,7 @@ async function resolveDraftTrip(draft: DraftTrip, profile: TravelerProfile): Pro
     const hint =
       draft.progressHints?.[Math.min(i, (draft.progressHints.length || 1) - 1)] ||
       `Resolving ${draftStop.name}…`;
-    progress('Finding real places', hint, 32 + Math.round((i / total) * 38), 'places');
+    progress('finding real places', hint, 32 + Math.round((i / total) * 38), 'places');
 
     const near = draftStop.approximateLocation || originPlace.location;
     let resolved =
@@ -158,14 +161,14 @@ async function resolveDraftTrip(draft: DraftTrip, profile: TravelerProfile): Pro
         address: draftStop.searchQuery,
         mapsUrl: placeMapsUrl({ name: draftStop.name, location: near }),
       };
-      log(`Approximate pin for ${draftStop.name}`, {
+      log(`approx pin for ${draftStop.name} (Places was shy)`, {
         phase: 'places',
         kind: 'warn',
         percent: 32 + Math.round((i / total) * 38),
       });
     } else {
       log(
-        `${resolved.photoUrl ? '📷 ' : ''}${resolved.name}${resolved.rating ? ` · ★ ${resolved.rating.toFixed(1)}` : ''}`,
+        `${draftStop.isSideQuest ? '✦ side quest · ' : ''}${resolved.photoUrl ? '📷 ' : ''}${resolved.name}${resolved.rating ? ` · ★ ${resolved.rating.toFixed(1)}` : ''}`,
         { phase: 'places', kind: 'place', percent: 32 + Math.round((i / total) * 38) },
       );
     }
@@ -206,22 +209,22 @@ async function resolveDraftTrip(draft: DraftTrip, profile: TravelerProfile): Pro
     });
   }
 
-  progress('Plotting the route', 'Calling Google Directions for real drive times…', 75, 'routing');
+  progress('drawing the route', 'Google Directions doing the math…', 75, 'routing');
 
   const maxHours = profile.maxDriveHoursPerDay;
   let legs = await buildDriveLegs(stops, maxHours);
-  log(`Mapped ${legs.length} driving legs`, { phase: 'routing', kind: 'route', percent: 78 });
+  log(`${legs.length} driving legs locked`, { phase: 'routing', kind: 'route', percent: 78 });
 
   const over = legs.filter((l) => l.exceedsMaxDrive);
   if (over.length) {
-    log(`Warning: ${over.length} leg(s) exceed your ${maxHours}h/day max`, {
+    log(`heads up · ${over.length} leg(s) over your ${maxHours}h/day max`, {
       phase: 'routing',
       kind: 'warn',
       percent: 80,
     });
   }
 
-  progress('Fuel & timing', 'Adding fuel stops on long legs…', 85, 'routing');
+  progress('fuel check', 'dropping gas stops on the long hauls…', 85, 'routing');
   const fuelStops: Stop[] = [];
   for (const leg of legs.filter((l) => l.fuelSuggested)) {
     const from = stops.find((s) => s.id === leg.fromStopId);
@@ -229,7 +232,7 @@ async function resolveDraftTrip(draft: DraftTrip, profile: TravelerProfile): Pro
     if (!from || !to) continue;
     const fuel = await findFuelAlongRoute(from.location, to.location);
     if (!fuel) continue;
-    log(`Fuel stop: ${fuel.name}`, { phase: 'routing', kind: 'place', percent: 88 });
+    log(`fuel · ${fuel.name}`, { phase: 'routing', kind: 'place', percent: 88 });
     fuelStops.push({
       id: uuid(),
       name: fuel.name,
@@ -269,7 +272,7 @@ async function resolveDraftTrip(draft: DraftTrip, profile: TravelerProfile): Pro
     legs = await buildDriveLegs(allStops, maxHours);
   }
 
-  progress('Budgeting the trip', 'Estimating fuel, lodging, food & activities…', 92, 'budget');
+  progress('running the numbers', 'fuel · stay · eats · fun…', 92, 'budget');
 
   const days = buildDaysFromStops(allStops, draft.days);
   const mpg = useKeysStore.getState().settings.vehicleMpg ?? draft.assumedMpg ?? null;
@@ -294,7 +297,7 @@ async function resolveDraftTrip(draft: DraftTrip, profile: TravelerProfile): Pro
 
   trip = mergeLegsIntoTrip(trip, legs);
   trip = applyBudget(trip, profile, mpg);
-  log(`Budget ~$${Math.round(trip.budget.total)} · ${Math.round(trip.totalMiles)} mi`, {
+  log(`~$${Math.round(trip.budget.total)} · ${Math.round(trip.totalMiles)} mi`, {
     phase: 'budget',
     kind: 'success',
     percent: 94,
@@ -318,10 +321,10 @@ export async function runAutopilot(userPrompt: string): Promise<Trip> {
   });
 
   try {
-    log('Reading traveler profile & preferences…', {
+    log('skimming your traveler profile…', {
       phase: 'thinking',
       kind: 'status',
-      step: 'Warming up Autopilot',
+      step: 'warming up',
       percent: 4,
     });
     log(
@@ -355,12 +358,12 @@ export async function runAutopilot(userPrompt: string): Promise<Trip> {
         if (now - lastHintAt > 700) {
           lastHintAt = now;
           const hints = extractPartialHints(buffer);
-          const hint = hints[hints.length - 1] || 'Streaming itinerary draft…';
+          const hint = hints[hints.length - 1] || 'plotting chaos in a good way…';
           const pct = Math.min(20, 8 + Math.floor(tokenCount / 40));
           log(hint, {
             phase: 'thinking',
             kind: 'thought',
-            step: 'Autopilot is thinking',
+            step: 'autopilot is cooking',
             percent: pct,
             streamPreview: preview,
           });
@@ -377,10 +380,10 @@ export async function runAutopilot(userPrompt: string): Promise<Trip> {
       },
     });
 
-    progress('Draft ready', 'Validating itinerary structure…', 21, 'thinking');
+    progress('draft locked', 'validating the itinerary…', 21, 'thinking');
     const raw = extractJSON<unknown>(content);
     const draft = draftTripSchema.parse(raw);
-    log(`Plan locked: ${draft.title} · ${draft.totalDays} days`, {
+    log(`locked: ${draft.title} · ${draft.totalDays} days`, {
       phase: 'thinking',
       kind: 'success',
       percent: 22,
@@ -395,21 +398,21 @@ export async function runAutopilot(userPrompt: string): Promise<Trip> {
     const trip = await resolveDraftTrip(draft, profile);
     trip.prompt = userPrompt;
 
-    progress('Almost there', 'Syncing map and budget…', 96, 'done');
+    progress('almost', 'syncing map + budget…', 96, 'done');
     useTripStore.getState().setActiveTrip(trip);
     useUIStore.getState().setDayFilter('all');
-    log(`Trip ready — ${trip.title}`, {
+    log(`you're so in · ${trip.title}`, {
       phase: 'done',
       kind: 'success',
-      step: 'Trip ready',
+      step: 'trip ready',
       percent: 100,
     });
     return trip;
   } catch (error) {
-    log(friendlyError(error, 'Autopilot could not finish this trip'), {
+    log(friendlyError(error, 'autopilot glitched — try again'), {
       phase: 'error',
       kind: 'warn',
-      step: 'Something went wrong',
+      step: 'oops',
     });
     throw new Error(friendlyError(error, 'Autopilot could not finish this trip'));
   }
@@ -573,6 +576,7 @@ async function applyEditResponse(
       const idx = trip.stops.findIndex((s) => s.id === update.id);
       if (idx < 0) continue;
       let stop = { ...trip.stops[idx], ...update };
+      if (update.isSideQuest != null) stop.isSideQuest = update.isSideQuest;
       if (update.searchQuery) {
         const resolved = await searchPlace(update.searchQuery, stop.location);
         if (resolved) {

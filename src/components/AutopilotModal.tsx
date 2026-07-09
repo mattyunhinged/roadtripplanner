@@ -10,6 +10,7 @@ import {
   X,
   CheckCircle2,
   Brain,
+  Compass,
 } from 'lucide-react';
 import { Button, Spinner, TextArea } from '@/components/ui';
 import { runAutopilot } from '@/lib/ai/engine';
@@ -18,10 +19,10 @@ import { cn } from '@/lib/utils';
 import type { AutopilotLogEntry } from '@/types';
 
 const SUGGESTIONS = [
-  '5 day fall trip through New England under $1,500',
-  'Surprise me, 3 days from home',
-  'Long weekend Pacific Coast Highway with great food',
-  'Family camping loop through national parks, 6 days',
+  'surprise me · 3 days · main character energy',
+  '5 day New England fall trip under $1.5k',
+  'PCH weekend · food + overlooks only',
+  'national parks loop · camping · 6 days',
 ];
 
 function LogIcon({ kind }: { kind?: AutopilotLogEntry['kind'] }) {
@@ -58,14 +59,14 @@ export function AutopilotModal() {
     setError('');
     try {
       const trip = await runAutopilot(value);
-      showToast(`Ready: ${trip.title}`, 'success');
+      showToast(`locked in · ${trip.title}`, 'success');
       window.setTimeout(() => {
         setOpen(false);
         setPrompt('');
         clearProgress();
-      }, 900);
+      }, 1100);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Autopilot failed');
+      setError(err instanceof Error ? err.message : 'Autopilot glitched out');
     } finally {
       setRunning(false);
     }
@@ -92,23 +93,25 @@ export function AutopilotModal() {
             <div className="liquid-orb right-[-5%] bottom-[-30%] h-48 w-48 bg-[var(--color-sky)]/25" />
 
             <div className="relative z-10">
-              <div className="mb-4 flex items-start justify-between gap-3">
+              <div className="mb-5 flex items-start justify-between gap-3">
                 <div>
                   <div className="inline-flex items-center gap-2 rounded-full glass-soft px-3 py-1 text-sm text-[var(--accent)]">
-                    <Sparkles className="h-4 w-4" /> Autopilot AI
+                    <Sparkles className="h-4 w-4" /> Autopilot
                     {running && (
                       <span className="ml-1 inline-flex items-center gap-1 text-[var(--fg-muted)]">
                         <span className="relative flex h-2 w-2">
                           <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--accent)] opacity-60" />
                           <span className="relative inline-flex h-2 w-2 rounded-full bg-[var(--accent)]" />
                         </span>
-                        live
+                        cooking
                       </span>
                     )}
                   </div>
-                  <h2 className="mt-2 font-display text-3xl">Where should the road take you?</h2>
+                  <h2 className="mt-2 font-display text-3xl md:text-4xl">
+                    where we going?
+                  </h2>
                   <p className="mt-1 text-sm text-[var(--fg-muted)]">
-                    Watch Autopilot think, resolve real places, and draw your route live.
+                    one sentence. we&apos;ll build the whole trip + side quests.
                   </p>
                 </div>
                 <button
@@ -129,17 +132,17 @@ export function AutopilotModal() {
                   <TextArea
                     value={prompt}
                     onChange={(e) => setPrompt(e.target.value)}
-                    placeholder='e.g. "5 day fall trip through New England under $1,500"'
-                    className="glass-input relative z-10"
+                    placeholder='e.g. "surprise me, 3 days, food + views"'
+                    className="glass-input relative z-10 min-h-[88px] text-base"
                     disabled={running}
                   />
-                  <div className="mt-3 flex flex-wrap gap-2">
+                  <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
                     {SUGGESTIONS.map((s) => (
                       <button
                         key={s}
                         type="button"
                         onClick={() => start(s)}
-                        className="rounded-full glass-soft px-3 py-1.5 text-left text-xs text-[var(--fg-muted)] transition hover:text-[var(--fg)]"
+                        className="rounded-2xl glass-soft px-3 py-3 text-left text-sm text-[var(--fg-muted)] transition hover:text-[var(--fg)] hover:ring-1 hover:ring-[var(--accent)]/40"
                       >
                         {s}
                       </button>
@@ -149,25 +152,24 @@ export function AutopilotModal() {
               )}
 
               {running && progress && (
-                <div className="mt-2 space-y-4">
-                  <div className="rounded-2xl glass-soft p-4">
-                    <div className="mb-2 flex items-center justify-between text-sm">
-                      <span className="font-medium">{progress.step}</span>
-                      <span className="tabular-nums text-[var(--fg-subtle)]">{progress.percent}%</span>
-                    </div>
-                    <div className="h-2 overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
+                <div className="mt-1 space-y-4">
+                  <div className="overflow-hidden rounded-3xl glass-soft">
+                    <div className="relative h-2 overflow-hidden bg-black/10 dark:bg-white/10">
                       <motion.div
                         className="h-full rounded-full bg-gradient-to-r from-[var(--accent)] via-[var(--color-sky)] to-[var(--color-sage)]"
                         animate={{ width: `${progress.percent}%` }}
                         transition={{ ease: 'easeOut', duration: 0.35 }}
                       />
                     </div>
-                    <p className="mt-3 text-sm text-[var(--fg-muted)]">{progress.detail}</p>
+                    <div className="flex items-center justify-between px-4 py-3 text-sm">
+                      <span className="font-medium">{progress.step}</span>
+                      <span className="tabular-nums text-[var(--fg-subtle)]">{progress.percent}%</span>
+                    </div>
                   </div>
 
                   <div
                     ref={logRef}
-                    className="max-h-56 space-y-1.5 overflow-y-auto rounded-2xl glass-soft p-3"
+                    className="max-h-64 space-y-1 overflow-y-auto rounded-3xl glass-soft p-3"
                   >
                     {progress.log.map((entry) => (
                       <div
@@ -190,9 +192,9 @@ export function AutopilotModal() {
                       </div>
                     ))}
                     {progress.streamPreview && progress.phase === 'thinking' && (
-                      <div className="mt-2 rounded-xl border border-[var(--glass-border-inner)] bg-black/5 p-2 font-mono text-[10px] leading-relaxed text-[var(--fg-subtle)] dark:bg-white/5">
+                      <div className="mt-2 rounded-2xl border border-[var(--glass-border-inner)] bg-black/5 p-2.5 font-mono text-[10px] leading-relaxed text-[var(--fg-subtle)] dark:bg-white/5">
                         <div className="mb-1 flex items-center gap-1 text-[var(--accent)]">
-                          <Camera className="h-3 w-3" /> streaming draft
+                          <Camera className="h-3 w-3" /> brain dump
                         </div>
                         <span className="opacity-80">{progress.streamPreview}</span>
                         <span className="ml-0.5 inline-block h-3 w-1 animate-pulse bg-[var(--accent)] align-middle" />
@@ -205,7 +207,10 @@ export function AutopilotModal() {
                       <Brain className="h-3 w-3" /> {progress.phase}
                     </span>
                     <span className="inline-flex items-center gap-1 rounded-full glass-soft px-2.5 py-1">
-                      <Navigation className="h-3 w-3" /> Maps + Places live
+                      <Compass className="h-3 w-3" /> side quests loading
+                    </span>
+                    <span className="inline-flex items-center gap-1 rounded-full glass-soft px-2.5 py-1">
+                      <Navigation className="h-3 w-3" /> maps live
                     </span>
                   </div>
                 </div>
@@ -216,7 +221,7 @@ export function AutopilotModal() {
                   {error}
                   <div className="mt-2">
                     <Button size="sm" variant="secondary" onClick={() => start()}>
-                      Retry
+                      try again
                     </Button>
                   </div>
                 </div>
@@ -225,7 +230,7 @@ export function AutopilotModal() {
               {!running && (
                 <div className="mt-5 flex justify-end gap-2">
                   <Button variant="ghost" onClick={() => setOpen(false)}>
-                    Cancel
+                    nah
                   </Button>
                   <Button
                     variant="accent"
@@ -235,14 +240,14 @@ export function AutopilotModal() {
                     className="shadow-lg shadow-[var(--accent)]/20"
                   >
                     <Sparkles className="h-4 w-4" />
-                    Launch Autopilot
+                    let&apos;s ride
                   </Button>
                 </div>
               )}
 
               {running && (
                 <div className="mt-4 flex items-center justify-center gap-2 text-sm text-[var(--fg-muted)]">
-                  <Spinner className="h-4 w-4" /> Building your roadtrip…
+                  <Spinner className="h-4 w-4" /> building your arc…
                 </div>
               )}
             </div>

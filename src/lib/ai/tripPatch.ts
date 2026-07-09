@@ -71,6 +71,7 @@ export function draftStopToStop(draft: DraftStop, resolved?: Partial<Stop>): Sto
     aiNotes: draft.aiNotes,
     website: resolved?.website,
     phone: resolved?.phone,
+    isSideQuest: draft.isSideQuest ?? resolved?.isSideQuest,
   };
 }
 

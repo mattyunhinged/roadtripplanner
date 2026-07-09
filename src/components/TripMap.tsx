@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { APIProvider, Map, useMap } from '@vis.gl/react-google-maps';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Replace, Sparkles, Star, Trash2, X, ExternalLink } from 'lucide-react';
+import { Replace, Sparkles, Star, Trash2, X, ExternalLink, Compass } from 'lucide-react';
 import { Button, Spinner } from '@/components/ui';
 import { MAP_STYLES_DARK, MAP_STYLES_LIGHT, decodePolyline } from '@/lib/google/maps';
 import { runAskAi } from '@/lib/ai/engine';
@@ -204,8 +204,15 @@ function PlaceCard({ stop, onClose }: { stop: Stop; onClose: () => void }) {
       <div className="relative z-10 p-4">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <div className="text-xs uppercase tracking-wider text-[var(--fg-subtle)]">
-              {categoryLabel(stop.category)} · Day {stop.dayIndex + 1}
+            <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-wider text-[var(--fg-subtle)]">
+              <span>
+                {categoryLabel(stop.category)} · Day {stop.dayIndex + 1}
+              </span>
+              {stop.isSideQuest && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-[var(--color-sky)]/20 px-2 py-0.5 text-[10px] font-semibold text-[var(--color-sky)] normal-case tracking-normal">
+                  <Compass className="h-3 w-3" /> side quest
+                </span>
+              )}
             </div>
             <h3 className="font-display text-xl">
               {stop.mapsUrl ? (
