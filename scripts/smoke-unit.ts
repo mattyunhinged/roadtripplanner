@@ -115,4 +115,18 @@ assert(repaired.totalDays === 3, 'extractJSON repairs trailing commas');
 const fenced = extractJSON<{ ok: boolean }>('```json\n{ "ok": true }\n```');
 assert(fenced.ok === true, 'extractJSON handles fenced JSON');
 
+// Valid JSON containing curly quotes inside strings must NOT be corrupted.
+const curly = extractJSON<{ title: string; vibe: string }>(
+  '{ "title": "Matty & Claudio\u2019s Epic Loop", "vibe": "a side of \u201Cweird\u201D and wow" }',
+);
+assert(curly.title === 'Matty & Claudio\u2019s Epic Loop', 'extractJSON keeps curly apostrophes');
+assert(curly.vibe.includes('\u201Cweird\u201D'), 'extractJSON keeps curly quotes in strings');
+
+// Truncated response (token cap hit mid-stream) should salvage the parsed prefix.
+const truncated = extractJSON<{ title: string; stops: { name: string }[] }>(
+  '{ "title": "Big Trip", "stops": [ { "name": "A" }, { "name": "B" }, { "name": "C', 
+);
+assert(truncated.title === 'Big Trip', 'salvaged truncated JSON keeps title');
+assert(truncated.stops.length >= 2, 'salvaged truncated JSON keeps complete stops');
+
 console.log('All unit checks passed');

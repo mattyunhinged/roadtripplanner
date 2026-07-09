@@ -191,15 +191,6 @@ function stripCodeFences(text: string): string {
   return fence?.[1]?.trim() || text.trim();
 }
 
-function normalizeJSONText(text: string): string {
-  let out = text.trim();
-  out = out.replace(/^\uFEFF/, '');
-  out = out.replace(/[\u201C\u201D]/g, '"').replace(/[\u2018\u2019]/g, "'");
-  out = out.replace(/^\s*\/\/.*$/gm, '');
-  out = out.replace(/,\s*([}\]])/g, '$1');
-  return out;
-}
-
 function extractBalancedObject(text: string): string | null {
   const start = text.indexOf('{');
   if (start < 0) return null;
@@ -235,22 +226,106 @@ function extractBalancedObject(text: string): string | null {
   return null;
 }
 
-function repairCommonJSONIssues(text: string): string {
-  let out = normalizeJSONText(text);
+/** Remove trailing commas before } or ] without touching string contents. */
+function removeTrailingCommas(text: string): string {
+  let out = '';
+  let inString = false;
+  let escaped = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inString) {
+      out += ch;
+      if (escaped) escaped = false;
+      else if (ch === '\\') escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') {
+      inString = true;
+      out += ch;
+      continue;
+    }
+    if (ch === ',') {
+      let j = i + 1;
+      while (j < text.length && /\s/.test(text[j])) j++;
+      if (text[j] === '}' || text[j] === ']') continue; // drop the comma
+    }
+    out += ch;
+  }
+  return out;
+}
+
+/** Repair keys/quotes only outside of string values. */
+function repairStructuralIssues(text: string): string {
+  let out = text.replace(/^\uFEFF/, '');
   // Unquoted keys: { title: "x" } -> { "title": "x" }
   out = out.replace(/([{,]\s*)([A-Za-z_][A-Za-z0-9_]*)\s*:/g, '$1"$2":');
   // Single-quoted string values
   out = out.replace(/:\s*'([^'\\]*(?:\\.[^'\\]*)*)'/g, (_m, inner: string) => {
-    const escaped = inner.replace(/"/g, '\\"');
-    return `: "${escaped}"`;
+    const esc = inner.replace(/"/g, '\\"');
+    return `: "${esc}"`;
   });
+  return removeTrailingCommas(out);
+}
+
+/** Close any open strings/brackets so a truncated response can still parse. */
+function closeOpenStructures(text: string): string {
+  let inString = false;
+  let escaped = false;
+  const stack: string[] = [];
+
+  for (const ch of text) {
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === '\\') escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') inString = true;
+    else if (ch === '{' || ch === '[') stack.push(ch);
+    else if (ch === '}' || ch === ']') stack.pop();
+  }
+
+  let out = text;
+  if (inString) out += '"';
+  out = out.replace(/,\s*$/, '');
+  for (let i = stack.length - 1; i >= 0; i--) {
+    out += stack[i] === '{' ? '}' : ']';
+  }
   return out;
+}
+
+/** Best-effort salvage of a truncated JSON object (e.g. token cap hit mid-stream). */
+function salvageTruncatedJSON(text: string): string | null {
+  const start = text.indexOf('{');
+  if (start < 0) return null;
+  let candidate = text.slice(start);
+
+  for (let attempt = 0; attempt < 60; attempt++) {
+    const closed = removeTrailingCommas(closeOpenStructures(candidate));
+    try {
+      JSON.parse(closed);
+      return closed;
+    } catch {
+      // Trim back to the previous structural boundary and retry.
+      const cut = Math.max(
+        candidate.lastIndexOf(','),
+        candidate.lastIndexOf('{'),
+        candidate.lastIndexOf('['),
+      );
+      if (cut <= 0) return null;
+      candidate = candidate.slice(0, cut);
+    }
+  }
+  return null;
 }
 
 function parseCandidates(text: string): string[] {
   const stripped = stripCodeFences(text);
+  const candidates: string[] = [stripped];
+
   const balanced = extractBalancedObject(stripped);
-  const candidates = [stripped];
   if (balanced) candidates.push(balanced);
 
   const first = stripped.indexOf('{');
@@ -259,8 +334,13 @@ function parseCandidates(text: string): string[] {
     candidates.push(stripped.slice(first, last + 1));
   }
 
-  const repaired = candidates.flatMap((c) => [normalizeJSONText(c), repairCommonJSONIssues(c)]);
-  return [...new Set(repaired.filter(Boolean))];
+  // Raw candidates FIRST (valid JSON must never be "repaired"), then repaired versions.
+  const ordered = [
+    ...candidates,
+    ...candidates.map(removeTrailingCommas),
+    ...candidates.map(repairStructuralIssues),
+  ];
+  return [...new Set(ordered.filter(Boolean))];
 }
 
 export function extractJSON<T>(text: string): T {
@@ -277,6 +357,12 @@ export function extractJSON<T>(text: string): T {
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
     }
+  }
+
+  // Last resort: the response was likely cut off mid-generation.
+  const salvaged = salvageTruncatedJSON(stripCodeFences(text));
+  if (salvaged) {
+    return JSON.parse(salvaged) as T;
   }
 
   const snippet = text.trim().slice(0, 180).replace(/\s+/g, ' ');

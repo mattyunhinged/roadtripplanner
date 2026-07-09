@@ -402,7 +402,8 @@ export async function runAutopilot(
       },
     ];
     const temperature = prefs?.generationSpeed === 'fast' ? 0.35 : 0.55;
-    const maxTokens = prefs?.generationSpeed === 'fast' ? 5000 : 8000;
+    // Big trips can exceed 8k output tokens and get truncated mid-JSON.
+    const maxTokens = prefs?.generationSpeed === 'fast' ? 8000 : 16000;
 
     let content = await provider.stream(keys.aiKey, model, {
       messages,
