@@ -39,15 +39,33 @@ export const draftDaySchema = z.object({
 export const draftTripSchema = z.object({
   title: z.string().min(1),
   vibe: z.string().default(''),
-  totalDays: z.coerce.number().int().min(1).max(14),
+  totalDays: z.coerce.number().int().min(1).max(90),
   originQuery: z.string().optional(),
   destinationQueries: z.array(z.string()).default([]),
   roundTrip: z.boolean().default(true),
   days: z.array(draftDaySchema).default([]),
-  stops: z.array(draftStopSchema).min(1),
+  stops: z.array(draftStopSchema).default([]),
   budgetNotes: z.string().optional(),
   assumedMpg: z.coerce.number().optional(),
   progressHints: z.array(z.string()).optional(),
+});
+
+/** Lightweight outline before stop batches (supports massive trips). */
+export const tripOutlineSchema = z.object({
+  title: z.string().min(1),
+  vibe: z.string().default(''),
+  totalDays: z.coerce.number().int().min(1).max(90),
+  originQuery: z.string().min(1),
+  destinationQueries: z.array(z.string()).default([]),
+  roundTrip: z.boolean().default(true),
+  days: z.array(draftDaySchema).min(1),
+  budgetNotes: z.string().optional(),
+  assumedMpg: z.coerce.number().optional(),
+  progressHints: z.array(z.string()).optional(),
+});
+
+export const stopBatchSchema = z.object({
+  stops: z.array(draftStopSchema).min(1),
 });
 
 export const tripEditResponseSchema = z.object({
@@ -103,4 +121,5 @@ export const packingListSchema = z.object({
 
 export type DraftTrip = z.infer<typeof draftTripSchema>;
 export type DraftStop = z.infer<typeof draftStopSchema>;
+export type TripOutline = z.infer<typeof tripOutlineSchema>;
 export type TripEditResponse = z.infer<typeof tripEditResponseSchema>;

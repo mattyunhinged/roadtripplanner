@@ -107,26 +107,25 @@ Return ONLY one valid JSON object. No markdown fences. No commentary before/afte
 
 JSON rules (strict):
 - Double-quote EVERY key and EVERY string
-- No trailing commas
-- No comments
+- No trailing commas, no comments
 - Use straight ASCII apostrophes (') inside strings, never curly quotes
-- Keep strings short: title ≤60 chars, vibe ≤120 chars, aiNotes ≤80 chars, day titles ≤40 chars
+- Keep strings short: title ≤80 chars, vibe ≤160 chars, aiNotes ≤90 chars, day titles ≤48 chars
 
 Craft rules:
-- First stop MUST be origin on dayIndex 0 order 0
+- Honor the user's requested scale — short weekend OR massive multi-week epic. Do NOT shrink a big ask.
+- First stop MUST be origin on dayIndex 0 order 0 when returning stops
 - Respect highway preference + age rules (youngest guest wins for alcohol/nightlife bans)
 - Match activity tags; scale food/lodging for full crew
 - Include lodging most nights + meals + scenic/attractions
-- Include 2–4 side quests (isSideQuest: true)
+- Include side quests (isSideQuest: true) — about 1 per 2–3 days on big trips
 - searchQuery must be Google Places-resolvable (Name + City + State)
 - dayIndex and order are 0-based integers
-- Keep the plan compact so JSON stays complete
 
 generationSpeed:
-- fast = 2–4 days, 3–4 stops/day
-- beautiful = 3–6 days, 4–5 stops/day (hard max 6 days, max 28 stops total)`;
+- fast = leaner days (3–4 stops/day), still honor requested length
+- beautiful = richer days (4–6 stops/day), still honor requested length`;
 
-export function autopilotUserPrompt(input: {
+export function autopilotOutlinePrompt(input: {
   prompt: string;
   profile: TravelerProfile;
   mpg: number | null;
@@ -147,14 +146,12 @@ export function autopilotUserPrompt(input: {
   const tagLabels = tags
     .map((t) => ACTIVITY_TAG_OPTIONS.find((o) => o.id === t)?.label || t)
     .join(', ');
-  const dayCap = speed === 'fast' ? 4 : 6;
-  const stopCap = speed === 'fast' ? 16 : 28;
 
   return `User said: ${input.prompt}
 
-STARTING POINT (origin stop day 0): ${start}
+STARTING POINT: ${start}
 Highway preference: ${highway}
-Generation mode: ${speed} (hard cap ${dayCap} days, ≤${stopCap} stops total)
+Generation mode: ${speed}
 Lead age group: ${age}
 ${ageActivityGuidance(age)}
 ${crewAgeGuidance(input.profile)}
@@ -165,31 +162,81 @@ ${profilePrompt(input.profile)}
 
 Effective MPG/MPGe: ${input.mpg ?? input.profile.vehicle?.mpg ?? 28}
 
-Return ONLY this JSON shape (fill with real values, keep it compact):
+PHASE 1 — OUTLINE ONLY (no stops yet).
+Infer totalDays from the user ask. Support massive trips (even 2–8+ weeks) when they ask for it.
+Return ONLY:
 {
   "title": "short title",
   "vibe": "short vibe",
-  "totalDays": 3,
+  "totalDays": 7,
   "originQuery": "${start}",
   "destinationQueries": ["City ST"],
   "roundTrip": true,
   "days": [{ "index": 0, "title": "Day title", "summary": "one line" }],
-  "stops": [{
-    "name": "Place Name",
-    "category": "origin",
-    "dayIndex": 0,
-    "order": 0,
-    "searchQuery": "Place Name City ST",
-    "approximateLocation": { "lat": 0, "lng": 0 },
-    "timeWindow": "9am-11am",
-    "costEstimate": 0,
-    "aiNotes": "short note",
-    "isSideQuest": false
-  }],
   "budgetNotes": "one line",
   "assumedMpg": ${input.mpg ?? input.profile.vehicle?.mpg ?? 28},
-  "progressHints": ["short status 1", "short status 2", "short status 3"]
-}`;
+  "progressHints": ["status 1", "status 2", "status 3"]
+}
+days array MUST have exactly totalDays entries with consecutive indexes starting at 0.`;
+}
+
+export function autopilotStopBatchPrompt(input: {
+  prompt: string;
+  profile: TravelerProfile;
+  outline: {
+    title: string;
+    vibe: string;
+    totalDays: number;
+    originQuery: string;
+    destinationQueries: string[];
+    roundTrip: boolean;
+    days: { index: number; title: string; summary?: string }[];
+  };
+  dayIndexes: number[];
+  prefs?: Partial<TripPrefs>;
+  previousStopTail?: string;
+}): string {
+  const prefs = input.prefs;
+  const speed: GenerationSpeed = prefs?.generationSpeed || 'beautiful';
+  const stopsPerDay = speed === 'fast' ? '3-4' : '4-6';
+  const dayMeta = input.outline.days
+    .filter((d) => input.dayIndexes.includes(d.index))
+    .map((d) => `D${d.index}: ${d.title}${d.summary ? ` — ${d.summary}` : ''}`)
+    .join('\n');
+
+  return `Continue Autopilot for trip "${input.outline.title}" (${input.outline.totalDays} days).
+User ask: ${input.prompt}
+Origin: ${input.outline.originQuery}
+Destinations: ${input.outline.destinationQueries.join(' | ') || 'n/a'}
+Round trip: ${input.outline.roundTrip}
+Mode: ${speed} (~${stopsPerDay} stops/day including lodging/food as needed)
+
+Traveler:
+${profilePrompt(input.profile)}
+
+Build stops ONLY for these day indexes: [${input.dayIndexes.join(', ')}]
+Day briefs:
+${dayMeta}
+
+${input.previousStopTail ? `Last stops from prior days (continue logically):\n${input.previousStopTail}\n` : ''}
+Rules:
+- If day 0 is included, first stop must be origin (category "origin")
+- Include lodging most nights, meals, attractions/scenic, and ~1 side quest every 2–3 days
+- searchQuery = "Name City ST" Google-resolvable
+- Keep aiNotes short
+- Return ONLY: { "stops": [ ... ] }
+- Every stop.dayIndex must be one of [${input.dayIndexes.join(', ')}]
+- order restarts at 0 within each day`;
+}
+
+/** @deprecated single-shot prompt kept for fallbacks */
+export function autopilotUserPrompt(input: {
+  prompt: string;
+  profile: TravelerProfile;
+  mpg: number | null;
+  prefs?: Partial<TripPrefs>;
+}): string {
+  return autopilotOutlinePrompt(input);
 }
 
 export const COPILOT_SYSTEM = `You are the trip copilot for "On The Road" by Ryzord — Grok-coded bestie, funny, useful.

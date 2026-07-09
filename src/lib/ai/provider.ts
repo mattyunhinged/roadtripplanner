@@ -22,7 +22,8 @@ export interface AIProvider {
 
 async function postJSON<T>(url: string, body: unknown): Promise<T> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 180_000);
+  // Multi-phase massive trips can take a while per batch.
+  const timeout = setTimeout(() => controller.abort(), 300_000);
   try {
     const response = await fetch(url, {
       method: 'POST',
@@ -37,7 +38,7 @@ async function postJSON<T>(url: string, body: unknown): Promise<T> {
     return data;
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') {
-      throw new Error('AI request timed out after 3 minutes. Try Fast mode or a shorter trip.');
+      throw new Error('AI request timed out after 5 minutes on this batch. Try again — big trips run in phases.');
     }
     throw error;
   } finally {

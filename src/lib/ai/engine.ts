@@ -2,7 +2,8 @@ import { v4 as uuid } from 'uuid';
 import { getAIProvider, extractJSON } from '@/lib/ai/provider';
 import {
   AUTOPILOT_SYSTEM,
-  autopilotUserPrompt,
+  autopilotOutlinePrompt,
+  autopilotStopBatchPrompt,
   COPILOT_SYSTEM,
   askAiPrompt,
   PACKING_SYSTEM,
@@ -11,9 +12,12 @@ import {
 } from '@/lib/ai/prompts';
 import {
   draftTripSchema,
+  tripOutlineSchema,
+  stopBatchSchema,
   tripEditResponseSchema,
   packingListSchema,
   type DraftTrip,
+  type DraftStop,
 } from '@/lib/ai/schemas';
 import {
   applyBudget,
@@ -312,6 +316,230 @@ async function resolveDraftTrip(draft: DraftTrip, profile: TravelerProfile): Pro
   return trip;
 }
 
+function chunkIndexes(total: number, size: number): number[][] {
+  const out: number[][] = [];
+  for (let i = 0; i < total; i += size) {
+    const batch: number[] = [];
+    for (let j = i; j < Math.min(total, i + size); j++) batch.push(j);
+    out.push(batch);
+  }
+  return out;
+}
+
+function withHeartbeat(lines: string[], run: () => Promise<string>, percentBase = 8): Promise<string> {
+  let beat = 0;
+  const heartbeat = window.setInterval(() => {
+    const line = lines[beat % lines.length];
+    beat += 1;
+    log(line, {
+      phase: 'thinking',
+      kind: 'thought',
+      step: 'autopilot is cooking',
+      percent: Math.min(percentBase + 8, percentBase + beat),
+    });
+  }, 2200);
+  return run().finally(() => window.clearInterval(heartbeat));
+}
+
+async function generateDraftTrip(
+  provider: ReturnType<typeof getAIProvider>,
+  apiKey: string,
+  model: string,
+  userPrompt: string,
+  profile: TravelerProfile,
+  effectiveMpg: number | null,
+  prefs?: Partial<TripPrefs>,
+): Promise<DraftTrip> {
+  const temperature = prefs?.generationSpeed === 'fast' ? 0.3 : 0.45;
+
+  // Phase 1: outline (title/days/destinations) — small JSON, reliable even for huge trips
+  log('mapping the big picture…', {
+    phase: 'thinking',
+    kind: 'status',
+    step: 'outlining trip',
+    percent: 9,
+  });
+  const outlineContent = await withHeartbeat(
+    [
+      'reading the scale of your ask…',
+      'laying out the day arc…',
+      'pinning destinations…',
+      'locking the outline…',
+    ],
+    () =>
+      provider.complete(apiKey, model, {
+        messages: [
+          { role: 'system', content: AUTOPILOT_SYSTEM },
+          {
+            role: 'user',
+            content: autopilotOutlinePrompt({
+              prompt: userPrompt,
+              profile,
+              mpg: effectiveMpg,
+              prefs,
+            }),
+          },
+        ],
+        jsonMode: true,
+        temperature,
+        maxTokens: 8000,
+      }),
+    9,
+  );
+
+  let outline = tripOutlineSchema.parse(extractJSON<unknown>(outlineContent));
+  // Ensure days array matches totalDays
+  if (outline.days.length < outline.totalDays) {
+    const existing = new Set(outline.days.map((d) => d.index));
+    for (let i = 0; i < outline.totalDays; i++) {
+      if (!existing.has(i)) {
+        outline.days.push({ index: i, title: `Day ${i + 1}`, summary: '' });
+      }
+    }
+    outline.days.sort((a, b) => a.index - b.index);
+  }
+  outline.days = outline.days.slice(0, outline.totalDays);
+
+  if (prefs?.startAddress) {
+    outline.originQuery = prefs.startAddress;
+  }
+
+  log(`outline locked · ${outline.title} · ${outline.totalDays} days`, {
+    phase: 'thinking',
+    kind: 'success',
+    percent: 14,
+  });
+  if (outline.progressHints?.length) {
+    for (const hint of outline.progressHints.slice(0, 3)) {
+      log(hint, { phase: 'thinking', kind: 'thought', percent: 15 });
+    }
+  }
+
+  // Phase 2: stop batches — 3 days at a time so massive trips never truncate
+  const batchSize = outline.totalDays <= 5 ? outline.totalDays : outline.totalDays <= 14 ? 3 : 2;
+  const batches = chunkIndexes(outline.totalDays, Math.max(1, batchSize));
+  const allStops: DraftStop[] = [];
+
+  for (let b = 0; b < batches.length; b++) {
+    const dayIndexes = batches[b];
+    const from = dayIndexes[0] + 1;
+    const to = dayIndexes[dayIndexes.length - 1] + 1;
+    const pct = 15 + Math.round(((b + 1) / batches.length) * 6);
+    log(`filling days ${from}–${to} of ${outline.totalDays}…`, {
+      phase: 'thinking',
+      kind: 'status',
+      step: `batch ${b + 1}/${batches.length}`,
+      percent: pct,
+    });
+
+    const previousStopTail = allStops
+      .slice(-6)
+      .map((s) => `D${s.dayIndex + 1} #${s.order + 1} ${s.category}: ${s.name}`)
+      .join('\n');
+
+    const batchContent = await withHeartbeat(
+      [
+        `scouting days ${from}–${to}…`,
+        'slotting food + lodging…',
+        'adding scenic + side quests…',
+        'packing this batch…',
+      ],
+      () =>
+        provider.complete(apiKey, model, {
+          messages: [
+            { role: 'system', content: AUTOPILOT_SYSTEM },
+            {
+              role: 'user',
+              content: autopilotStopBatchPrompt({
+                prompt: userPrompt,
+                profile,
+                outline,
+                dayIndexes,
+                prefs,
+                previousStopTail,
+              }),
+            },
+          ],
+          jsonMode: true,
+          temperature,
+          maxTokens: 10000,
+        }),
+      pct,
+    );
+
+    let batchStops: DraftStop[];
+    try {
+      batchStops = stopBatchSchema.parse(extractJSON<unknown>(batchContent)).stops;
+    } catch {
+      log(`batch ${b + 1} messy — rewriting days ${from}–${to}…`, {
+        phase: 'thinking',
+        kind: 'warn',
+        percent: pct,
+      });
+      const retry = await provider.complete(apiKey, model, {
+        messages: [
+          { role: 'system', content: AUTOPILOT_SYSTEM },
+          {
+            role: 'user',
+            content: `${autopilotStopBatchPrompt({
+              prompt: userPrompt,
+              profile,
+              outline,
+              dayIndexes,
+              prefs,
+              previousStopTail,
+            })}\n\nIMPORTANT: Previous JSON was invalid. Return ONLY { "stops": [...] } with complete stops for days [${dayIndexes.join(', ')}]. Double-quote all keys/strings.`,
+          },
+        ],
+        jsonMode: true,
+        temperature: 0.15,
+        maxTokens: 10000,
+      });
+      batchStops = stopBatchSchema.parse(extractJSON<unknown>(retry)).stops;
+    }
+
+    const filtered = batchStops.filter((s) => dayIndexes.includes(s.dayIndex));
+    allStops.push(...(filtered.length ? filtered : batchStops));
+    log(`days ${from}–${to} locked · ${filtered.length || batchStops.length} stops`, {
+      phase: 'thinking',
+      kind: 'success',
+      percent: pct,
+    });
+  }
+
+  if (!allStops.length) {
+    throw new Error('Autopilot returned an outline but no stops. Try again.');
+  }
+
+  // Normalize order within each day
+  const byDay = new Map<number, DraftStop[]>();
+  for (const stop of allStops) {
+    const list = byDay.get(stop.dayIndex) || [];
+    list.push(stop);
+    byDay.set(stop.dayIndex, list);
+  }
+  const normalized: DraftStop[] = [];
+  for (const [dayIndex, list] of [...byDay.entries()].sort((a, b) => a[0] - b[0])) {
+    list.forEach((stop, order) => {
+      normalized.push({ ...stop, dayIndex, order });
+    });
+  }
+
+  return draftTripSchema.parse({
+    title: outline.title,
+    vibe: outline.vibe,
+    totalDays: outline.totalDays,
+    originQuery: outline.originQuery,
+    destinationQueries: outline.destinationQueries,
+    roundTrip: outline.roundTrip,
+    days: outline.days,
+    stops: normalized,
+    budgetNotes: outline.budgetNotes,
+    assumedMpg: outline.assumedMpg,
+    progressHints: outline.progressHints,
+  });
+}
+
 export async function runAutopilot(
   userPrompt: string,
   prefs?: Partial<TripPrefs>,
@@ -366,102 +594,23 @@ export async function runAutopilot(
       );
     }
 
-    const messages = [
-      { role: 'system' as const, content: AUTOPILOT_SYSTEM },
-      {
-        role: 'user' as const,
-        content: autopilotUserPrompt({
-          prompt: userPrompt,
-          profile,
-          mpg: effectiveMpg,
-          prefs,
-        }),
-      },
-    ];
-    const temperature = prefs?.generationSpeed === 'fast' ? 0.3 : 0.45;
-    const maxTokens = prefs?.generationSpeed === 'fast' ? 6000 : 10000;
-    const heartbeatLines = [
-      'sketching the route bones…',
-      'picking stops that slap…',
-      'slotting food + lodging…',
-      'sneaking in side quests…',
-      'tightening the JSON…',
-      'almost locked…',
-    ];
-    let beat = 0;
-    const heartbeat = window.setInterval(() => {
-      const line = heartbeatLines[beat % heartbeatLines.length];
-      beat += 1;
-      log(line, {
-        phase: 'thinking',
-        kind: 'thought',
-        step: 'autopilot is cooking',
-        percent: Math.min(18, 8 + beat),
-      });
-    }, 2200);
-
-    let content = '';
-    try {
-      // Non-streaming is more reliable for large JSON than SSE assembly.
-      content = await provider.complete(keys.aiKey, model, {
-        messages,
-        jsonMode: true,
-        temperature,
-        maxTokens,
-      });
-    } finally {
-      window.clearInterval(heartbeat);
-    }
+    const draft = await generateDraftTrip(
+      provider,
+      keys.aiKey,
+      model,
+      userPrompt,
+      profile,
+      effectiveMpg,
+      prefs,
+    );
 
     progress('draft locked', 'validating the itinerary…', 21, 'thinking');
-    let draft: DraftTrip;
-    try {
-      draft = draftTripSchema.parse(extractJSON<unknown>(content));
-    } catch (parseError) {
-      log('first draft was messy — asking for a clean compact JSON…', {
-        phase: 'thinking',
-        kind: 'warn',
-        percent: 18,
-      });
-      const retryBeat = window.setInterval(() => {
-        log('rewriting a cleaner trip draft…', {
-          phase: 'thinking',
-          kind: 'thought',
-          percent: 19,
-        });
-      }, 2500);
-      try {
-        content = await provider.complete(keys.aiKey, model, {
-          messages: [
-            ...messages,
-            {
-              role: 'user',
-              content:
-                'IMPORTANT: Return a SHORTER complete trip now — max 4 days and max 16 stops. ONLY valid JSON. Double-quote all keys and strings. No markdown. No trailing commas. Keep aiNotes under 60 chars.',
-            },
-          ],
-          jsonMode: true,
-          temperature: 0.15,
-          maxTokens: 6000,
-        });
-      } finally {
-        window.clearInterval(retryBeat);
-      }
-      draft = draftTripSchema.parse(extractJSON<unknown>(content));
-    }
-    log(`locked: ${draft.title} · ${draft.totalDays} days`, {
+    log(`locked: ${draft.title} · ${draft.totalDays} days · ${draft.stops.length} stops`, {
       phase: 'thinking',
       kind: 'success',
       percent: 22,
     });
 
-    if (draft.progressHints?.length) {
-      for (const hint of draft.progressHints.slice(0, 3)) {
-        log(hint, { phase: 'places', kind: 'thought', percent: 23 });
-      }
-    }
-
-    // Prefer wizard start over draft origin when provided
     if (prefs?.startAddress) {
       draft.originQuery = prefs.startAddress;
     }

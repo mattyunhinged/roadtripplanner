@@ -434,7 +434,7 @@ export function TripWizard() {
                         <Zap className="mb-2 h-5 w-5" />
                         <div className="font-display text-xl">Fast</div>
                         <p className={cn('mt-1 text-sm', speed === 'fast' ? 'opacity-80' : 'text-[var(--fg-muted)]')}>
-                          Lean plan · fewer stops · quicker
+                          Lean days · still honors huge multi-week asks
                         </p>
                       </button>
                       <button
@@ -450,7 +450,7 @@ export function TripWizard() {
                         <Camera className="mb-2 h-5 w-5" />
                         <div className="font-display text-xl">Beautiful</div>
                         <p className={cn('mt-1 text-sm', speed === 'beautiful' ? 'opacity-80' : 'text-[var(--fg-muted)]')}>
-                          Richer · more scenic + side quests
+                          Richer days · scales to massive epics in batches
                         </p>
                       </button>
                     </div>
