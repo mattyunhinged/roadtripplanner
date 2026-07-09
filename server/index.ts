@@ -247,11 +247,24 @@ async function completeOpenAI(body: AIRequestBody): Promise<string> {
   return data.choices?.[0]?.message?.content || '';
 }
 
+function withAnthropicJsonPrefill(
+  messages: { role: 'system' | 'user' | 'assistant'; content: string }[],
+  jsonMode?: boolean,
+) {
+  if (!jsonMode) return messages;
+  const hasAssistant = messages.some((m) => m.role === 'assistant');
+  if (hasAssistant) return messages;
+  return [...messages, { role: 'assistant' as const, content: '{' }];
+}
+
 async function completeAnthropic(body: AIRequestBody): Promise<string> {
   const system = body.messages.filter((m) => m.role === 'system').map((m) => m.content).join('\n\n');
-  const messages = body.messages
-    .filter((m) => m.role !== 'system')
-    .map((m) => ({ role: m.role, content: m.content }));
+  const messages = withAnthropicJsonPrefill(
+    body.messages
+      .filter((m) => m.role !== 'system')
+      .map((m) => ({ role: m.role, content: m.content })),
+    body.jsonMode,
+  );
 
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -278,7 +291,9 @@ async function completeAnthropic(body: AIRequestBody): Promise<string> {
     throw new Error(data.error?.message || 'Anthropic request failed');
   }
 
-  return data.content?.filter((c) => c.type === 'text').map((c) => c.text || '').join('') || '';
+  const text =
+    data.content?.filter((c) => c.type === 'text').map((c) => c.text || '').join('') || '';
+  return body.jsonMode && !text.trim().startsWith('{') ? `{${text}` : text;
 }
 
 async function streamOpenAI(body: AIRequestBody, res: express.Response) {
@@ -307,14 +322,19 @@ async function streamOpenAI(body: AIRequestBody, res: express.Response) {
 
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
+  let buffer = '';
 
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
-    const chunk = decoder.decode(value, { stream: true });
-    for (const line of chunk.split('\n')) {
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+
+    for (const line of lines) {
       if (!line.startsWith('data: ')) continue;
       const payload = line.slice(6).trim();
+      if (!payload) continue;
       if (payload === '[DONE]') {
         res.write('data: [DONE]\n\n');
         continue;
@@ -328,7 +348,7 @@ async function streamOpenAI(body: AIRequestBody, res: express.Response) {
           res.write(`data: ${JSON.stringify({ content })}\n\n`);
         }
       } catch {
-        // ignore malformed chunks
+        // ignore malformed/partial SSE JSON lines
       }
     }
   }
@@ -338,9 +358,12 @@ async function streamOpenAI(body: AIRequestBody, res: express.Response) {
 
 async function streamAnthropic(body: AIRequestBody, res: express.Response) {
   const system = body.messages.filter((m) => m.role === 'system').map((m) => m.content).join('\n\n');
-  const messages = body.messages
-    .filter((m) => m.role !== 'system')
-    .map((m) => ({ role: m.role, content: m.content }));
+  const messages = withAnthropicJsonPrefill(
+    body.messages
+      .filter((m) => m.role !== 'system')
+      .map((m) => ({ role: m.role, content: m.content })),
+    body.jsonMode,
+  );
 
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -369,6 +392,7 @@ async function streamAnthropic(body: AIRequestBody, res: express.Response) {
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
+  let prefaced = false;
 
   while (true) {
     const { done, value } = await reader.read();
@@ -387,7 +411,12 @@ async function streamAnthropic(body: AIRequestBody, res: express.Response) {
           delta?: { type?: string; text?: string };
         };
         if (parsed.type === 'content_block_delta' && parsed.delta?.text) {
-          res.write(`data: ${JSON.stringify({ content: parsed.delta.text })}\n\n`);
+          let content = parsed.delta.text;
+          if (body.jsonMode && !prefaced) {
+            content = `{${content}`;
+            prefaced = true;
+          }
+          res.write(`data: ${JSON.stringify({ content })}\n\n`);
         }
         if (parsed.type === 'message_stop') {
           res.write('data: [DONE]\n\n');

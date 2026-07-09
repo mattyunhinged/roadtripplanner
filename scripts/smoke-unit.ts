@@ -6,6 +6,7 @@ import {
   reorderStops,
   recomputeDayTotals,
 } from '../src/lib/ai/tripPatch.ts';
+import { extractJSON } from '../src/lib/ai/provider.ts';
 import { DEFAULT_PROFILE } from '../src/types/index.ts';
 import type { Stop } from '../src/types/index.ts';
 
@@ -104,5 +105,14 @@ const budget = estimateBudget(trip, DEFAULT_PROFILE, 25);
 assert(budget.fuel > 0, 'fuel estimated');
 assert(budget.total > budget.fuel, 'total includes more than fuel');
 assert(budget.perDay.length >= 1, 'per day breakdown');
+
+const repaired = extractJSON<{ title: string; totalDays: number }>(
+  "{\n title: 'Coastal Run',\n totalDays: 3,\n}",
+);
+assert(repaired.title === 'Coastal Run', 'extractJSON repairs unquoted keys');
+assert(repaired.totalDays === 3, 'extractJSON repairs trailing commas');
+
+const fenced = extractJSON<{ ok: boolean }>('```json\n{ "ok": true }\n```');
+assert(fenced.ok === true, 'extractJSON handles fenced JSON');
 
 console.log('All unit checks passed');

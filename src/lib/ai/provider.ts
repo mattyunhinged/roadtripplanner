@@ -55,8 +55,15 @@ async function streamComplete(
   });
 
   if (!response.ok || !response.body) {
-    const text = await response.text();
-    throw new Error(text || 'Streaming failed');
+    let message = 'Streaming failed';
+    try {
+      const data = (await response.json()) as { error?: string };
+      message = data.error || message;
+    } catch {
+      const text = await response.text();
+      if (text) message = text.slice(0, 240);
+    }
+    throw new Error(message);
   }
 
   const reader = response.body.getReader();
@@ -74,7 +81,7 @@ async function streamComplete(
     for (const line of lines) {
       if (!line.startsWith('data: ')) continue;
       const payload = line.slice(6).trim();
-      if (payload === '[DONE]') continue;
+      if (!payload || payload === '[DONE]') continue;
       try {
         const parsed = JSON.parse(payload) as { content?: string; error?: string };
         if (parsed.error) throw new Error(parsed.error);
@@ -83,8 +90,9 @@ async function streamComplete(
           options.onToken?.(parsed.content);
         }
       } catch (error) {
-        if (error instanceof Error && error.message !== 'Unexpected end of JSON input') {
-          if ((error as Error).message.includes('{') === false) throw error;
+        // Fatal only for explicit upstream errors; ignore malformed/partial SSE chunks.
+        if (error instanceof Error && !(error instanceof SyntaxError)) {
+          throw error;
         }
       }
     }
@@ -178,20 +186,102 @@ export function getAIProvider(id: AIProviderId): AIProvider {
   return providers[id];
 }
 
-export function extractJSON<T>(text: string): T {
-  const trimmed = text.trim();
-  try {
-    return JSON.parse(trimmed) as T;
-  } catch {
-    const fence = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/);
-    if (fence?.[1]) {
-      return JSON.parse(fence[1].trim()) as T;
+function stripCodeFences(text: string): string {
+  const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  return fence?.[1]?.trim() || text.trim();
+}
+
+function normalizeJSONText(text: string): string {
+  let out = text.trim();
+  out = out.replace(/^\uFEFF/, '');
+  out = out.replace(/[\u201C\u201D]/g, '"').replace(/[\u2018\u2019]/g, "'");
+  out = out.replace(/^\s*\/\/.*$/gm, '');
+  out = out.replace(/,\s*([}\]])/g, '$1');
+  return out;
+}
+
+function extractBalancedObject(text: string): string | null {
+  const start = text.indexOf('{');
+  if (start < 0) return null;
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i];
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (ch === '\\') {
+        escaped = true;
+      } else if (ch === '"') {
+        inString = false;
+      }
+      continue;
     }
-    const start = trimmed.indexOf('{');
-    const end = trimmed.lastIndexOf('}');
-    if (start >= 0 && end > start) {
-      return JSON.parse(trimmed.slice(start, end + 1)) as T;
+
+    if (ch === '"') {
+      inString = true;
+      continue;
     }
-    throw new Error('AI returned invalid JSON');
+    if (ch === '{') depth += 1;
+    if (ch === '}') {
+      depth -= 1;
+      if (depth === 0) return text.slice(start, i + 1);
+    }
   }
+
+  return null;
+}
+
+function repairCommonJSONIssues(text: string): string {
+  let out = normalizeJSONText(text);
+  // Unquoted keys: { title: "x" } -> { "title": "x" }
+  out = out.replace(/([{,]\s*)([A-Za-z_][A-Za-z0-9_]*)\s*:/g, '$1"$2":');
+  // Single-quoted string values
+  out = out.replace(/:\s*'([^'\\]*(?:\\.[^'\\]*)*)'/g, (_m, inner: string) => {
+    const escaped = inner.replace(/"/g, '\\"');
+    return `: "${escaped}"`;
+  });
+  return out;
+}
+
+function parseCandidates(text: string): string[] {
+  const stripped = stripCodeFences(text);
+  const balanced = extractBalancedObject(stripped);
+  const candidates = [stripped];
+  if (balanced) candidates.push(balanced);
+
+  const first = stripped.indexOf('{');
+  const last = stripped.lastIndexOf('}');
+  if (first >= 0 && last > first) {
+    candidates.push(stripped.slice(first, last + 1));
+  }
+
+  const repaired = candidates.flatMap((c) => [normalizeJSONText(c), repairCommonJSONIssues(c)]);
+  return [...new Set(repaired.filter(Boolean))];
+}
+
+export function extractJSON<T>(text: string): T {
+  if (!text || !text.trim()) {
+    throw new Error('AI returned an empty response. Try again.');
+  }
+
+  const candidates = parseCandidates(text);
+  let lastError: Error | null = null;
+
+  for (const candidate of candidates) {
+    try {
+      return JSON.parse(candidate) as T;
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+    }
+  }
+
+  const snippet = text.trim().slice(0, 180).replace(/\s+/g, ' ');
+  const detail = lastError?.message || 'unknown parse error';
+  throw new Error(
+    `AI returned invalid JSON (${detail}). Preview: ${snippet}${text.trim().length > 180 ? '…' : ''}`,
+  );
 }

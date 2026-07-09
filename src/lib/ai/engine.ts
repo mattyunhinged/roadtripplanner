@@ -389,22 +389,26 @@ export async function runAutopilot(
 
     let lastHintAt = 0;
     let tokenCount = 0;
-    const content = await provider.stream(keys.aiKey, model, {
-      messages: [
-        { role: 'system', content: AUTOPILOT_SYSTEM },
-        {
-          role: 'user',
-          content: autopilotUserPrompt({
-            prompt: userPrompt,
-            profile,
-            mpg: effectiveMpg,
-            prefs,
-          }),
-        },
-      ],
+    const messages = [
+      { role: 'system' as const, content: AUTOPILOT_SYSTEM },
+      {
+        role: 'user' as const,
+        content: autopilotUserPrompt({
+          prompt: userPrompt,
+          profile,
+          mpg: effectiveMpg,
+          prefs,
+        }),
+      },
+    ];
+    const temperature = prefs?.generationSpeed === 'fast' ? 0.35 : 0.55;
+    const maxTokens = prefs?.generationSpeed === 'fast' ? 5000 : 8000;
+
+    let content = await provider.stream(keys.aiKey, model, {
+      messages,
       jsonMode: true,
-      temperature: prefs?.generationSpeed === 'fast' ? 0.6 : 0.85,
-      maxTokens: prefs?.generationSpeed === 'fast' ? 5000 : 8000,
+      temperature,
+      maxTokens,
       onToken: (token) => {
         tokenCount += 1;
         const current = useUIStore.getState().autopilotProgress;
@@ -437,8 +441,30 @@ export async function runAutopilot(
     });
 
     progress('draft locked', 'validating the itinerary…', 21, 'thinking');
-    const raw = extractJSON<unknown>(content);
-    const draft = draftTripSchema.parse(raw);
+    let draft: DraftTrip;
+    try {
+      draft = draftTripSchema.parse(extractJSON<unknown>(content));
+    } catch (parseError) {
+      log('stream got messy — retrying clean JSON…', {
+        phase: 'thinking',
+        kind: 'warn',
+        percent: 18,
+      });
+      content = await provider.complete(keys.aiKey, model, {
+        messages: [
+          ...messages,
+          {
+            role: 'user',
+            content:
+              'Your previous response was invalid JSON. Reply with ONLY a valid JSON object matching the schema. No markdown, no commentary.',
+          },
+        ],
+        jsonMode: true,
+        temperature: 0.2,
+        maxTokens,
+      });
+      draft = draftTripSchema.parse(extractJSON<unknown>(content));
+    }
     log(`locked: ${draft.title} · ${draft.totalDays} days`, {
       phase: 'thinking',
       kind: 'success',
@@ -591,11 +617,27 @@ export async function runTripEdit(
       },
     ],
     jsonMode: true,
-    temperature: 0.6,
+    temperature: 0.35,
     onToken,
   });
 
-  const parsed = tripEditResponseSchema.parse(extractJSON(content));
+  let parsed;
+  try {
+    parsed = tripEditResponseSchema.parse(extractJSON(content));
+  } catch {
+    const retry = await provider.complete(keys.aiKey, model, {
+      messages: [
+        { role: 'system', content: COPILOT_SYSTEM },
+        {
+          role: 'user',
+          content: `${askAiPrompt('copilot', userMessage, trip, focusStop)}\n\nTraveler:\n${profilePrompt(profile)}\n\nReply with ONLY valid JSON. No markdown.`,
+        },
+      ],
+      jsonMode: true,
+      temperature: 0.15,
+    });
+    parsed = tripEditResponseSchema.parse(extractJSON(retry));
+  }
   await applyEditResponse(parsed);
   return parsed.message;
 }
