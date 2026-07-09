@@ -175,7 +175,11 @@ export function ManualPlanModal() {
 
       const legs = await buildDriveLegs(trip.stops, profile.maxDriveHoursPerDay);
       trip = mergeLegsIntoTrip(trip, legs);
-      trip = applyBudget(trip, profile, useKeysStore.getState().settings.vehicleMpg);
+      trip = applyBudget(
+        trip,
+        profile,
+        useKeysStore.getState().settings.vehicleMpg ?? profile.vehicle?.mpg ?? null,
+      );
       setActiveTrip(trip);
       showToast('Trip scaffold created — add stops or ask AI to flesh it out', 'success');
       setOpen(false);

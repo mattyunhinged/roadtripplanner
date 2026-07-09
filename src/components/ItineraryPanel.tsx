@@ -215,6 +215,7 @@ export function ItineraryPanel() {
   const dayFilter = useUIStore((s) => s.dayFilter);
   const setDayFilter = useUIStore((s) => s.setDayFilter);
   const setAutopilotOpen = useUIStore((s) => s.setAutopilotOpen);
+  const setTripWizardOpen = useUIStore((s) => s.setTripWizardOpen);
   const showToast = useUIStore((s) => s.showToast);
   const [busy, setBusy] = useState(false);
 
@@ -253,10 +254,17 @@ export function ItineraryPanel() {
         </div>
         <button
           type="button"
-          onClick={() => setAutopilotOpen(true)}
+          onClick={() => setTripWizardOpen(true)}
           className="mx-auto inline-flex items-center gap-2 rounded-2xl bg-[var(--accent)] px-5 py-3 text-sm font-medium text-[var(--accent-fg)] shadow-lg shadow-[var(--accent)]/25"
         >
-          <Sparkles className="h-4 w-4" /> Launch Autopilot
+          <Sparkles className="h-4 w-4" /> New trip wizard
+        </button>
+        <button
+          type="button"
+          onClick={() => setAutopilotOpen(true)}
+          className="mx-auto text-xs text-[var(--fg-subtle)] underline"
+        >
+          or quick one-liner Autopilot
         </button>
       </div>
     );

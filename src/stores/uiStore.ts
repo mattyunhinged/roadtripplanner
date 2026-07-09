@@ -19,6 +19,7 @@ interface UIState {
   selectedStopId: string | null;
   chatOpen: boolean;
   autopilotOpen: boolean;
+  tripWizardOpen: boolean;
   manualOpen: boolean;
   mobileSheetExpanded: boolean;
   autopilotProgress: AutopilotProgress | null;
@@ -29,6 +30,7 @@ interface UIState {
   setSelectedStopId: (id: string | null) => void;
   setChatOpen: (open: boolean) => void;
   setAutopilotOpen: (open: boolean) => void;
+  setTripWizardOpen: (open: boolean) => void;
   setManualOpen: (open: boolean) => void;
   setMobileSheetExpanded: (open: boolean) => void;
   setAutopilotProgress: (progress: AutopilotProgress | null) => void;
@@ -49,6 +51,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   selectedStopId: null,
   chatOpen: false,
   autopilotOpen: false,
+  tripWizardOpen: false,
   manualOpen: false,
   mobileSheetExpanded: false,
   autopilotProgress: null,
@@ -60,6 +63,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   setSelectedStopId: (selectedStopId) => set({ selectedStopId }),
   setChatOpen: (chatOpen) => set({ chatOpen }),
   setAutopilotOpen: (autopilotOpen) => set({ autopilotOpen }),
+  setTripWizardOpen: (tripWizardOpen) => set({ tripWizardOpen }),
   setManualOpen: (manualOpen) => set({ manualOpen }),
   setMobileSheetExpanded: (mobileSheetExpanded) => set({ mobileSheetExpanded }),
   setAutopilotProgress: (autopilotProgress) => set({ autopilotProgress }),

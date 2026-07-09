@@ -157,9 +157,12 @@ export function SettingsScreen() {
           </section>
 
           <section className="rounded-3xl border border-[var(--border)] bg-[var(--bg-elevated)] p-5">
-            <h2 className="font-medium">Vehicle</h2>
+            <h2 className="font-medium">Vehicle / MPG</h2>
+            <p className="mt-1 text-sm text-[var(--fg-muted)]">
+              Full brand + model picker lives in onboarding. Override MPG/MPGe here anytime.
+            </p>
             <div className="mt-3">
-              <Label>MPG (optional — Autopilot assumes 28 if empty)</Label>
+              <Label>MPG / MPGe</Label>
               <Input value={mpg} onChange={(e) => setMpg(e.target.value)} placeholder="28" />
             </div>
           </section>

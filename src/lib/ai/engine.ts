@@ -30,7 +30,7 @@ import {
   placeMapsUrl,
   searchPlace,
 } from '@/lib/google/maps';
-import type { AutopilotPhase, PackingItem, Stop, TravelerProfile, Trip } from '@/types';
+import type { AutopilotPhase, PackingItem, Stop, TravelerProfile, Trip, TripPrefs } from '@/types';
 import { useKeysStore } from '@/stores/keysStore';
 import { useProfileStore } from '@/stores/profileStore';
 import { useTripStore } from '@/stores/tripStore';
@@ -224,15 +224,36 @@ async function resolveDraftTrip(draft: DraftTrip, profile: TravelerProfile): Pro
     });
   }
 
-  progress('fuel check', 'dropping gas stops on the long hauls…', 85, 'routing');
+  progress(
+    profile.vehicle?.fuelType === 'electric' ? 'charge check' : 'fuel check',
+    profile.vehicle?.fuelType === 'electric'
+      ? 'scouting EV-friendly towns on long legs…'
+      : 'dropping fuel stops on the long hauls…',
+    85,
+    'routing',
+  );
   const fuelStops: Stop[] = [];
+  const fuelQuery =
+    profile.vehicle?.fuelType === 'electric'
+      ? 'EV charging station'
+      : profile.vehicle?.fuelType === 'diesel'
+        ? 'diesel gas station'
+        : 'gas station';
   for (const leg of legs.filter((l) => l.fuelSuggested)) {
     const from = stops.find((s) => s.id === leg.fromStopId);
     const to = stops.find((s) => s.id === leg.toStopId);
     if (!from || !to) continue;
-    const fuel = await findFuelAlongRoute(from.location, to.location);
+    const mid = {
+      lat: (from.location.lat + to.location.lat) / 2,
+      lng: (from.location.lng + to.location.lng) / 2,
+    };
+    const fuel =
+      (await searchPlace(fuelQuery, mid)) || (await findFuelAlongRoute(from.location, to.location));
     if (!fuel) continue;
-    log(`fuel · ${fuel.name}`, { phase: 'routing', kind: 'place', percent: 88 });
+    log(
+      `${profile.vehicle?.fuelType === 'electric' ? 'charge' : 'fuel'} · ${fuel.name}`,
+      { phase: 'routing', kind: 'place', percent: 88 },
+    );
     fuelStops.push({
       id: uuid(),
       name: fuel.name,
@@ -246,8 +267,11 @@ async function resolveDraftTrip(draft: DraftTrip, profile: TravelerProfile): Pro
       photoUrl: fuel.photoUrl,
       photoUrls: fuel.photoUrls,
       mapsUrl: fuel.mapsUrl,
-      aiNotes: 'Suggested fuel stop for a long driving leg',
-      costEstimate: 50,
+      aiNotes:
+        profile.vehicle?.fuelType === 'electric'
+          ? 'Charge stop for a long EV leg'
+          : 'Suggested fuel stop for a long driving leg',
+      costEstimate: profile.vehicle?.fuelType === 'electric' ? 25 : 50,
     });
   }
 
@@ -275,7 +299,11 @@ async function resolveDraftTrip(draft: DraftTrip, profile: TravelerProfile): Pro
   progress('running the numbers', 'fuel · stay · eats · fun…', 92, 'budget');
 
   const days = buildDaysFromStops(allStops, draft.days);
-  const mpg = useKeysStore.getState().settings.vehicleMpg ?? draft.assumedMpg ?? null;
+  const mpg =
+    useKeysStore.getState().settings.vehicleMpg ??
+    profile.vehicle?.mpg ??
+    draft.assumedMpg ??
+    null;
 
   let trip = createEmptyTrip({
     title: draft.title,
@@ -305,16 +333,21 @@ async function resolveDraftTrip(draft: DraftTrip, profile: TravelerProfile): Pro
   return trip;
 }
 
-export async function runAutopilot(userPrompt: string): Promise<Trip> {
+export async function runAutopilot(
+  userPrompt: string,
+  prefs?: Partial<TripPrefs>,
+): Promise<Trip> {
   const keys = useKeysStore.getState().keys;
   if (!keys) throw new Error('Add your API keys first.');
   const profile = useProfileStore.getState().profile;
   const model = useKeysStore.getState().currentModel();
   const provider = getAIProvider(keys.aiProvider);
+  const effectiveMpg =
+    useKeysStore.getState().settings.vehicleMpg ?? profile.vehicle?.mpg ?? null;
 
   useUIStore.getState().setAutopilotProgress({
-    step: 'Warming up',
-    detail: 'Reading your traveler profile…',
+    step: 'warming up',
+    detail: 'reading your traveler profile…',
     percent: 2,
     phase: 'thinking',
     log: [],
@@ -331,6 +364,21 @@ export async function runAutopilot(userPrompt: string): Promise<Trip> {
       `${profile.travelStyle} · ${profile.budgetLevel} · max ${profile.maxDriveHoursPerDay}h/day · ${profile.partyType}`,
       { phase: 'thinking', kind: 'thought', percent: 6 },
     );
+    if (profile.vehicle) {
+      log(
+        `rolling in a ${profile.vehicle.brandName} ${profile.vehicle.modelName} (${profile.vehicle.fuelType})`,
+        { phase: 'thinking', kind: 'thought', percent: 7 },
+      );
+    }
+    if (prefs?.highwayPreference) {
+      log(`roads: ${prefs.highwayPreference}`, { phase: 'thinking', kind: 'thought', percent: 8 });
+    }
+    if (prefs?.generationSpeed) {
+      log(
+        prefs.generationSpeed === 'fast' ? 'fast mode · lean & mean' : 'beautiful mode · extra sauce',
+        { phase: 'thinking', kind: 'thought', percent: 8 },
+      );
+    }
 
     let lastHintAt = 0;
     let tokenCount = 0;
@@ -342,13 +390,14 @@ export async function runAutopilot(userPrompt: string): Promise<Trip> {
           content: autopilotUserPrompt({
             prompt: userPrompt,
             profile,
-            mpg: useKeysStore.getState().settings.vehicleMpg,
+            mpg: effectiveMpg,
+            prefs,
           }),
         },
       ],
       jsonMode: true,
-      temperature: 0.8,
-      maxTokens: 8000,
+      temperature: prefs?.generationSpeed === 'fast' ? 0.6 : 0.85,
+      maxTokens: prefs?.generationSpeed === 'fast' ? 5000 : 8000,
       onToken: (token) => {
         tokenCount += 1;
         const current = useUIStore.getState().autopilotProgress;
@@ -369,7 +418,7 @@ export async function runAutopilot(userPrompt: string): Promise<Trip> {
           });
         } else {
           useUIStore.getState().setAutopilotProgress({
-            step: current?.step || 'Autopilot is thinking',
+            step: current?.step || 'autopilot is cooking',
             detail: current?.detail || 'Streaming…',
             percent: Math.min(20, 8 + Math.floor(tokenCount / 40)),
             phase: 'thinking',
@@ -395,8 +444,27 @@ export async function runAutopilot(userPrompt: string): Promise<Trip> {
       }
     }
 
+    // Prefer wizard start over draft origin when provided
+    if (prefs?.startAddress) {
+      draft.originQuery = prefs.startAddress;
+    }
+
     const trip = await resolveDraftTrip(draft, profile);
     trip.prompt = userPrompt;
+    trip.highwayPreference = prefs?.highwayPreference || profile.highwayPreference;
+    trip.activityTags = prefs?.activityTags?.length
+      ? prefs.activityTags
+      : profile.activityTags;
+    trip.generationSpeed = prefs?.generationSpeed || 'beautiful';
+
+    if (prefs?.startLocation) {
+      trip.origin = {
+        lat: prefs.startLocation.lat,
+        lng: prefs.startLocation.lng,
+        address: prefs.startAddress || trip.origin.address,
+        placeId: prefs.startPlaceId,
+      };
+    }
 
     progress('almost', 'syncing map + budget…', 96, 'done');
     useTripStore.getState().setActiveTrip(trip);
@@ -643,7 +711,11 @@ async function applyEditResponse(
   );
   const legs = await buildDriveLegs(trip.stops, profile.maxDriveHoursPerDay);
   trip = mergeLegsIntoTrip(trip, legs);
-  trip = applyBudget(trip, profile, useKeysStore.getState().settings.vehicleMpg);
+  trip = applyBudget(
+    trip,
+    profile,
+    useKeysStore.getState().settings.vehicleMpg ?? profile.vehicle?.mpg ?? null,
+  );
   store.setActiveTrip(recomputeDayTotals(trip));
 }
 
@@ -685,6 +757,10 @@ export async function recalculateRoutes(): Promise<void> {
   const profile = useProfileStore.getState().profile;
   const legs = await buildDriveLegs(trip.stops, profile.maxDriveHoursPerDay);
   let next = mergeLegsIntoTrip(trip, legs);
-  next = applyBudget(next, profile, useKeysStore.getState().settings.vehicleMpg);
+  next = applyBudget(
+    next,
+    profile,
+    useKeysStore.getState().settings.vehicleMpg ?? profile.vehicle?.mpg ?? null,
+  );
   useTripStore.getState().setActiveTrip(next);
 }

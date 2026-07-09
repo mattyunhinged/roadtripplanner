@@ -25,9 +25,14 @@ export function estimateBudget(
   profile: TravelerProfile,
   mpg: number | null,
 ): BudgetBreakdown {
-  const effectiveMpg = mpg && mpg > 0 ? mpg : 28;
+  const effectiveMpg =
+    mpg && mpg > 0 ? mpg : profile.vehicle?.mpg && profile.vehicle.mpg > 0 ? profile.vehicle.mpg : 28;
   const totalMiles = trip.legs.reduce((sum, l) => sum + l.distanceMeters, 0) / 1609.344;
-  const fuel = (totalMiles / effectiveMpg) * FUEL_PRICE_PER_GALLON;
+  const isEv =
+    profile.vehicle?.fuelType === 'electric' || profile.vehicle?.fuelType === 'plugin_hybrid';
+  // Rough: EV uses MPGe with ~$0.16/kWh ≈ $3.6/gal equivalent scaled; keep simple $/gal proxy for MPGe
+  const energyPrice = isEv ? 3.2 : FUEL_PRICE_PER_GALLON;
+  const fuel = (totalMiles / effectiveMpg) * energyPrice;
 
   const lodgingNights = Math.max(0, (trip.days.length || trip.totalDays) - (trip.roundTrip ? 0 : 0));
   // Charge lodging for each night away: typically days-1 for one-way ending at dest, days for multi-day with overnight each night except maybe last if home
@@ -59,7 +64,7 @@ export function estimateBudget(
     const dayStops = trip.stops.filter((s) => s.dayIndex === day.index);
     const dayLegs = trip.legs.filter((l) => l.dayIndex === day.index);
     const dayMiles = dayLegs.reduce((sum, l) => sum + l.distanceMeters, 0) / 1609.344;
-    const dayFuel = (dayMiles / effectiveMpg) * FUEL_PRICE_PER_GALLON;
+    const dayFuel = (dayMiles / effectiveMpg) * energyPrice;
     const dayLodging = dayStops
       .filter((s) => s.category === 'lodging')
       .reduce((sum, s) => sum + (s.costEstimate || lodgingRate), 0);
@@ -90,6 +95,8 @@ export function estimateBudget(
     activities,
     total,
     perDay,
-    notes: `Assumes ${effectiveMpg} mpg at $${FUEL_PRICE_PER_GALLON.toFixed(2)}/gal`,
+    notes: isEv
+      ? `Assumes ${effectiveMpg} MPGe · EV energy proxy`
+      : `Assumes ${effectiveMpg} mpg at $${energyPrice.toFixed(2)}/gal${profile.vehicle ? ` · ${profile.vehicle.brandName} ${profile.vehicle.modelName}` : ''}`,
   };
 }

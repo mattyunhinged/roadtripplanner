@@ -123,7 +123,8 @@ export const useTripStore = create<TripState>((set, get) => ({
     const trip = get().activeTrip;
     if (!trip) return;
     const profile = useProfileStore.getState().profile;
-    const mpg = useKeysStore.getState().settings.vehicleMpg;
+    const mpg =
+      useKeysStore.getState().settings.vehicleMpg ?? profile.vehicle?.mpg ?? null;
     get().setActiveTrip(applyBudget(trip, profile, mpg));
   },
 }));

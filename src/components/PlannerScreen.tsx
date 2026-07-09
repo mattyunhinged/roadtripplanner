@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import {
   Backpack,
   BookOpen,
+  ImageIcon,
   Library,
   MapPinned,
   Plus,
@@ -12,15 +13,18 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { v4 as uuid } from 'uuid';
-import { BrandLockup, Button } from '@/components/ui';
+import { BrandLockup, Button, Spinner } from '@/components/ui';
 import { TripMap } from '@/components/TripMap';
 import { ItineraryPanel } from '@/components/ItineraryPanel';
 import { AutopilotModal } from '@/components/AutopilotModal';
+import { TripWizard } from '@/components/TripWizard';
 import { ManualPlanModal } from '@/components/ManualPlanModal';
 import { ChatDrawer } from '@/components/ChatDrawer';
+import { generateTripBoard } from '@/lib/ai/engine';
 import { reverseGeocode, searchPlace } from '@/lib/google/maps';
 import { recalculateRoutes } from '@/lib/ai/engine';
 import { cn } from '@/lib/utils';
+import { useKeysStore } from '@/stores/keysStore';
 import { useTripStore } from '@/stores/tripStore';
 import { useUIStore } from '@/stores/uiStore';
 import type { Stop } from '@/types';
@@ -29,14 +33,18 @@ export function PlannerScreen() {
   const trip = useTripStore((s) => s.activeTrip);
   const addStop = useTripStore((s) => s.addStop);
   const saveActiveToLibrary = useTripStore((s) => s.saveActiveToLibrary);
+  const setTripWizardOpen = useUIStore((s) => s.setTripWizardOpen);
   const setAutopilotOpen = useUIStore((s) => s.setAutopilotOpen);
   const setManualOpen = useUIStore((s) => s.setManualOpen);
   const setScreen = useUIStore((s) => s.setScreen);
   const mobileSheetExpanded = useUIStore((s) => s.mobileSheetExpanded);
   const setMobileSheetExpanded = useUIStore((s) => s.setMobileSheetExpanded);
   const showToast = useUIStore((s) => s.showToast);
+  const clearProgress = useUIStore((s) => s.clearAutopilotProgress);
+  const provider = useKeysStore((s) => s.keys?.aiProvider);
   const [addMode, setAddMode] = useState(false);
   const [search, setSearch] = useState('');
+  const [posterBusy, setPosterBusy] = useState(false);
 
   const onMapClickAdd = useCallback(
     async (lat: number, lng: number) => {
@@ -102,6 +110,26 @@ export function PlannerScreen() {
     }
   }
 
+  async function makePoster() {
+    if (!trip) return;
+    if (provider !== 'openai') {
+      showToast('Poster needs an OpenAI key — switch in Settings', 'info');
+      setScreen('settings');
+      return;
+    }
+    setPosterBusy(true);
+    try {
+      await generateTripBoard(trip);
+      showToast('Poster ready — check Export', 'success');
+      setScreen('export');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Poster failed', 'error');
+    } finally {
+      setPosterBusy(false);
+      window.setTimeout(() => clearProgress(), 500);
+    }
+  }
+
   return (
     <div className="relative flex h-full flex-col overflow-hidden bg-[var(--bg)]">
       <header className="no-print absolute left-0 right-0 top-0 z-20 map-fade-top px-4 pb-10 pt-4 md:px-6">
@@ -111,12 +139,25 @@ export function PlannerScreen() {
             <Button
               size="sm"
               variant="accent"
-              className="shadow-lg"
+              className="shadow-lg shadow-[var(--accent)]/25"
+              onClick={() => setTripWizardOpen(true)}
+            >
+              <Sparkles className="h-4 w-4" /> New trip
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              className="hidden sm:inline-flex"
               onClick={() => setAutopilotOpen(true)}
             >
-              <Sparkles className="h-4 w-4" /> Autopilot
+              Quick Autopilot
             </Button>
-            <Button size="sm" variant="secondary" className="hidden sm:inline-flex" onClick={() => setManualOpen(true)}>
+            <Button
+              size="sm"
+              variant="secondary"
+              className="hidden sm:inline-flex"
+              onClick={() => setManualOpen(true)}
+            >
               <MapPinned className="h-4 w-4" /> Manual
             </Button>
             <Button size="sm" variant="ghost" className="hidden md:inline-flex" onClick={() => setScreen('library')}>
@@ -159,38 +200,56 @@ export function PlannerScreen() {
           </div>
 
           {trip && (
-            <div className="no-print absolute right-4 top-24 z-10 hidden flex-col gap-2 md:flex">
+            <div className="no-print absolute right-4 top-24 z-10 hidden w-44 flex-col gap-2 md:flex">
+              <Button
+                size="sm"
+                variant="accent"
+                className="justify-start shadow-lg shadow-[var(--accent)]/20"
+                onClick={() => {
+                  saveActiveToLibrary();
+                  showToast('Trip saved', 'success');
+                }}
+              >
+                <Save className="h-4 w-4" /> Save this trip
+              </Button>
               <Button
                 size="sm"
                 variant="secondary"
-                className="glass-panel"
-                onClick={() => {
-                  saveActiveToLibrary();
-                  showToast('Trip saved to library', 'success');
-                }}
+                className="glass-panel justify-start"
+                disabled={posterBusy}
+                onClick={makePoster}
               >
-                <Save className="h-4 w-4" /> Save
+                {posterBusy ? <Spinner className="h-4 w-4" /> : <ImageIcon className="h-4 w-4" />}
+                {trip.boardImageUrl ? 'Regen poster' : 'Generate poster'}
               </Button>
-              <Button size="sm" variant="secondary" className="glass-panel" onClick={() => setScreen('export')}>
-                <Share2 className="h-4 w-4" /> Export
+              <Button
+                size="sm"
+                variant="secondary"
+                className="glass-panel justify-start"
+                onClick={() => setScreen('export')}
+              >
+                <Share2 className="h-4 w-4" /> Export / board
               </Button>
-              <Button size="sm" variant="secondary" className="glass-panel" onClick={() => setScreen('packing')}>
+              <Button
+                size="sm"
+                variant="secondary"
+                className="glass-panel justify-start"
+                onClick={() => setScreen('packing')}
+              >
                 <Backpack className="h-4 w-4" /> Packing
               </Button>
             </div>
           )}
         </div>
 
-        {/* Desktop itinerary */}
         <aside className="no-print glass-strong hidden w-[var(--panel-width)] shrink-0 border-l border-[var(--glass-border)] md:block">
           <ItineraryPanel />
         </aside>
       </div>
 
-      {/* Mobile bottom sheet */}
       <motion.div
         className="no-print absolute inset-x-0 bottom-0 z-20 md:hidden"
-        animate={{ height: mobileSheetExpanded ? '70%' : 120 }}
+        animate={{ height: mobileSheetExpanded ? '70%' : 132 }}
         transition={{ type: 'spring', stiffness: 280, damping: 30 }}
       >
         <div className="flex h-full flex-col overflow-hidden rounded-t-3xl glass-strong border border-[var(--glass-border)] shadow-2xl">
@@ -213,31 +272,37 @@ export function PlannerScreen() {
             {mobileSheetExpanded && <ItineraryPanel />}
           </div>
           <div className="flex gap-2 border-t border-[var(--glass-border-inner)] p-3">
-            <Button size="sm" variant="accent" className="flex-1" onClick={() => setAutopilotOpen(true)}>
-              <Sparkles className="h-4 w-4" /> Autopilot
+            <Button size="sm" variant="accent" className="flex-1" onClick={() => setTripWizardOpen(true)}>
+              <Sparkles className="h-4 w-4" /> New trip
             </Button>
+            {trip && (
+              <>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => {
+                    saveActiveToLibrary();
+                    showToast('Saved', 'success');
+                  }}
+                >
+                  <Save className="h-4 w-4" />
+                </Button>
+                <Button size="sm" variant="secondary" disabled={posterBusy} onClick={makePoster}>
+                  {posterBusy ? <Spinner className="h-4 w-4" /> : <ImageIcon className="h-4 w-4" />}
+                </Button>
+              </>
+            )}
             <Button size="sm" variant="secondary" onClick={() => setManualOpen(true)}>
               <BookOpen className="h-4 w-4" />
             </Button>
             <Button size="sm" variant="secondary" onClick={() => setScreen('library')}>
               <Library className="h-4 w-4" />
             </Button>
-            {trip && (
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={() => {
-                  saveActiveToLibrary();
-                  showToast('Saved', 'success');
-                }}
-              >
-                <Save className="h-4 w-4" />
-              </Button>
-            )}
           </div>
         </div>
       </motion.div>
 
+      <TripWizard />
       <AutopilotModal />
       <ManualPlanModal />
       <ChatDrawer />
